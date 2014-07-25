@@ -6,11 +6,16 @@ Require Import Smallstep.
 Require Import Arith.
 
 
-Module Disk <: SmallStepLang.
+Module Type DiskSize.
 
 Parameter Size: nat.
 
-Definition addr := {x:nat | x < Size}.
+End DiskSize.
+
+
+Module Disk (Size: DiskSize) <: SmallStepLang.
+
+Definition addr := {x:nat | x < Size.Size}.
 Definition block := nat.
 
 Definition eq_addr_dec (a b:addr) : {a=b}+{a<>b}.

@@ -14,7 +14,8 @@ FILES = CpdtTactics.v \
 	Closures.v \
 	Smallstep.v \
 	LoopfreeWF.v \
-	Disk.v \
+	DiskMod.v \
+	FsPartsMod.v \
 	FsLayout.v \
 	Balloc.v \
 	FileSpec.v \

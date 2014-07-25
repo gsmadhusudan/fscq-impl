@@ -118,3 +118,28 @@ Qed.
 
 Ltac resolve_setidx t :=
   (subst; rewrite setidx_same) || (rewrite setidx_other; [|t]).
+
+Ltac elim_intact_sig e :=
+  match e with
+  | exist _ _ _ => (* idtac "elim_intact_sig: unfolded version" e; *) fail 1
+  | _ =>
+    match goal with
+    | [ _: e = exist _ _ _ |- _ ] => (* idtac "elim_intact_sig: already got" e; *) fail 2
+    | _ => (* idtac "elim_intact_sig:" e; *) destruct e || case_eq e; intros
+    end
+  end.
+
+Ltac elim_sigs :=
+  match goal with
+  | [ _: context[proj1_sig ?x] |- _ ] => elim_intact_sig x
+  | [ |- context[proj1_sig ?x] ] => elim_intact_sig x
+  end.
+
+Ltac propagate_sigs :=
+  match goal with
+  | [ H1: ?a = exist _ _ _ |- _ ] =>
+    match goal with
+    | [ H2: context[proj1_sig a] |- _ ] => rewrite H1 in H2; simpl in H2
+    | [ |- context[proj1_sig a] ] => rewrite H1; simpl
+    end
+  end.
