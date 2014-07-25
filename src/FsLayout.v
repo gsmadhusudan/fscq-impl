@@ -10,7 +10,6 @@ Open Scope fscq.
 
 
 Definition SizeBlock := 4.
-Definition NBlockPerInode := 2.
 Definition NInode := 2.
 Definition NBlockMap := 3.
 
@@ -39,18 +38,24 @@ Module FsPartsDisk := FsParts InodePartDisk BmapPartDisk BlocksPartDisk.
 Module WholeDisk := Disk WholeDiskSize.
 
 
-Ltac omega' := repeat clear_sig_exist;
-               repeat elim_sigs; intros;
-               repeat clear_sig_exist;
-               subst; simpl in *;
-               unfold WholeDiskSize.Size in *;
-               unfold InodePartSize.Size in *;
-               unfold BmapPartSize.Size in *;
-               unfold BlocksPartSize.Size in *;
-               unfold SizeBlock in *; unfold NInode in *;
-               unfold NBlockPerInode in *; unfold NBlockMap in *;
-               omega.
+Ltac omega'unfold unfoldt :=
+  repeat clear_sig_exist;
+  repeat elim_sigs; intros;
+  repeat clear_sig_exist;
+  unfoldt;
+  subst; simpl in *;
+  omega.
 
+Ltac unfold_fslayout :=
+  unfold WholeDiskSize.Size in *;
+  unfold InodePartSize.Size in *;
+  unfold BmapPartSize.Size in *;
+  unfold BlocksPartSize.Size in *;
+  unfold SizeBlock in *; unfold NInode in *;
+  unfold NBlockMap in *.
+
+Ltac omega' :=
+  omega'unfold unfold_fslayout.
 
 Module FsPartsOnDisk <: Refines FsPartsDisk WholeDisk.
 
