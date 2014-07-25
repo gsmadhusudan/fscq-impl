@@ -143,3 +143,9 @@ Ltac propagate_sigs :=
     | [ |- context[proj1_sig a] ] => rewrite H1; simpl
     end
   end.
+
+Ltac clear_sig_exist :=
+  match goal with
+  | [ |- exist _ _ _ <> exist _ _ _ ] => apply sig_pi_ne
+  | [ H: exist _ ?a _ <> exist _ ?b _  |- _ ] => apply sig_ne in H
+  end.

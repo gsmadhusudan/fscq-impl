@@ -39,7 +39,10 @@ Module FsPartsDisk := FsParts InodePartDisk BmapPartDisk BlocksPartDisk.
 Module WholeDisk := Disk WholeDiskSize.
 
 
-Ltac omega' := repeat elim_sigs; intros; subst; simpl in *;
+Ltac omega' := repeat clear_sig_exist;
+               repeat elim_sigs; intros;
+               repeat clear_sig_exist;
+               subst; simpl in *;
                unfold WholeDiskSize.Size in *;
                unfold InodePartSize.Size in *;
                unfold BmapPartSize.Size in *;
@@ -62,6 +65,8 @@ Solve Obligations using intros; omega'.
 Program Definition b2w (n:BlocksPartDisk.addr) : WholeDisk.addr :=
   n + InodePartSize.Size + BmapPartSize.Size.
 Solve Obligations using intros; omega'.
+
+Ltac omega'' := unfold i2w in *; unfold m2w in *; unfold b2w in *; auto; omega'.
 
 Fixpoint CompileI (R T:Type) (p:InodePartDisk.Prog T)
                              (rx:T->WholeDisk.Prog R) : WholeDisk.Prog R :=
@@ -119,6 +124,14 @@ Inductive statematch : FsPartsDisk.State -> WholeDisk.State -> Prop :=
 Definition StateMatch := statematch.
 Hint Constructors statematch.
 
+Ltac resolve_disks :=
+  intros;
+  match goal with
+  | [ |- setidx ?eq _ ?a _ ?b = _ ] => destruct (eq a b)
+  | [ |- _ = setidx ?eq _ ?a _ ?b ] => idtac
+  end;
+  repeat resolve_setidx omega''; auto.
+
 Theorem FSim:
   forall R,
   forward_simulation (FsPartsDisk.Step R) (WholeDisk.Step R).
@@ -135,36 +148,134 @@ Proof.
   end.
 
   - (* I *)
-    eexists; split.
-    + inversion S; subst.
-      unfold Compile; fold (@Compile R).
-      induction p.
-      * eapply star_step; [constructor|].
-        match goal with
-        | [ H: forall _ _, _ -> star (WholeDisk.Step R) _ _ |- _ ] => apply H; [constructor|]
-        end;
-        match goal with
-        | [ H: star (?STEP R) _ _ |- _ ] =>
-          inversion H; match goal with
-          | [ Hstep: STEP _ _ _ |- _ ] => inversion Hstep; subst; crush
-          end
-        end.
-      * eapply star_step; [constructor|].
-fold CompileI. cbv beta.
+    generalize dependent s2. generalize dependent S.
+    generalize dependent i. generalize dependent m.
+    generalize dependent b.
+    unfold Compile; fold (@Compile R).
+    induction p.
 
-        match goal with
-        | [ H: forall _ _, _ -> star (WholeDisk.Step R) _ _ |- _ ] => apply H; [constructor|]
-        | [ H: forall _, _ -> star (WholeDisk.Step R) _ _ |- _ ] => apply H; [constructor|]
-        end.
-        match goal with
-        | [ H: star (?STEP R) _ _ |- _ ] =>
-          inversion H; match goal with
-          | [ Hstep: STEP _ _ _ |- _ ] => inversion Hstep; subst; crush
-          end
-        end.
+    + intros; simpl;
+      edestruct H; inversion S; clear S;
+      match goal with
+      | [ H: star (?STEP R) _ _ |- _ ] =>
+        inversion H; match goal with
+        | [ Hstep: STEP _ _ _ |- _ ] => inversion Hstep
+        end
+      end; subst;
+      [ constructor; eauto
+      | instantiate (1:=s2); eauto
+      | instantiate (2:=m); eauto
+      | instantiate (2:=b); eauto
+      | exists x; split;
+        [ eapply star_step; [constructor|crush] | crush ] ].
+    + intros; simpl;
+      edestruct H; inversion S; clear S;
+      match goal with
+      | [ H: star (?STEP R) _ _ |- _ ] =>
+        inversion H; match goal with
+        | [ Hstep: STEP _ _ _ |- _ ] => inversion Hstep
+        end
+      end; subst;
+      [ constructor; eauto
+      | instantiate (1:=(setidx WholeDisk.eq_addr_dec s2 (i2w a) v)); resolve_disks
+      | instantiate (2:=m); resolve_disks
+      | instantiate (2:=b); resolve_disks
+      | exists x; split;
+        [ eapply star_step; [constructor|crush] | crush ] ].
+    + intros; simpl;
+      inversion S; clear S; subst.
+      inversion STAR; [| match goal with
+                         | [ H: _ R (PS (_ v) _) _ |- _ ] => inversion H
+                         end ].
+      eexists; split; [ apply star_refl | constructor; crush ].
 
+  - (* M *)
+    generalize dependent s2. generalize dependent S.
+    generalize dependent i. generalize dependent m.
+    generalize dependent b.
+    unfold Compile; fold (@Compile R).
+    induction p.
 
-        
+    + intros; simpl;
+      edestruct H; inversion S; clear S;
+      match goal with
+      | [ H: star (?STEP R) _ _ |- _ ] =>
+        inversion H; match goal with
+        | [ Hstep: STEP _ _ _ |- _ ] => inversion Hstep
+        end
+      end; subst;
+      [ constructor; eauto
+      | instantiate (2:=i);
+        instantiate (1:=s2); eauto
+      | eauto
+      | instantiate (2:=b); eauto
+      | exists x; split;
+        [ eapply star_step; [constructor|crush] | crush ] ].
+    + intros; simpl;
+      edestruct H; inversion S; clear S;
+      match goal with
+      | [ H: star (?STEP R) _ _ |- _ ] =>
+        inversion H; match goal with
+        | [ Hstep: STEP _ _ _ |- _ ] => inversion Hstep
+        end
+      end; subst;
+      [ constructor; eauto
+      | instantiate (2:=i);
+        instantiate (1:=(setidx WholeDisk.eq_addr_dec s2 (m2w a) v)); resolve_disks
+      | resolve_disks
+      | instantiate (2:=b); resolve_disks
+      | exists x; split;
+        [ eapply star_step; [constructor|crush] | crush ] ].
+    + intros; simpl;
+      inversion S; clear S; subst.
+      inversion STAR; [| match goal with
+                         | [ H: _ R (PS (_ v) _) _ |- _ ] => inversion H
+                         end ].
+      eexists; split; [ apply star_refl | constructor; crush ].
 
+  - (* B *)
+    generalize dependent s2. generalize dependent S.
+    generalize dependent i. generalize dependent m.
+    generalize dependent b.
+    unfold Compile; fold (@Compile R).
+    induction p.
 
-apply STAR.
+    + intros; simpl;
+      edestruct H; inversion S; clear S;
+      match goal with
+      | [ H: star (?STEP R) _ _ |- _ ] =>
+        inversion H; match goal with
+        | [ Hstep: STEP _ _ _ |- _ ] => inversion Hstep
+        end
+      end; subst;
+      [ constructor; eauto
+      | instantiate (2:=i);
+        instantiate (1:=s2); eauto
+      | instantiate (2:=m); eauto
+      | eauto
+      | exists x; split;
+        [ eapply star_step; [constructor|crush] | crush ] ].
+    + intros; simpl;
+      edestruct H; inversion S; clear S;
+      match goal with
+      | [ H: star (?STEP R) _ _ |- _ ] =>
+        inversion H; match goal with
+        | [ Hstep: STEP _ _ _ |- _ ] => inversion Hstep
+        end
+      end; subst;
+      [ constructor; eauto
+      | instantiate (2:=i);
+        instantiate (1:=(setidx WholeDisk.eq_addr_dec s2 (b2w a) v)); resolve_disks
+      | instantiate (2:=m); resolve_disks
+      | resolve_disks
+      | exists x; split;
+        [ eapply star_step; [constructor|crush] | crush ] ].
+    + intros; simpl;
+      inversion S; clear S; subst.
+      inversion STAR; [| match goal with
+                         | [ H: _ R (PS (_ v) _) _ |- _ ] => inversion H
+                         end ].
+      eexists; split; [ apply star_refl | constructor; crush ].
+Qed.
+
+End FsPartsOnDisk.

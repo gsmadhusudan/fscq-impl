@@ -25,8 +25,8 @@ Definition eq_addr_dec (a b:addr) : {a=b}+{a<>b}.
 Defined.
 
 Inductive prog {R:Type} : Type :=
-  | Read (b:addr) (rx:block->prog)
-  | Write (b:addr) (v:block) (rx:unit->prog)
+  | Read (a:addr) (rx:block->prog)
+  | Write (a:addr) (v:block) (rx:unit->prog)
   | Return (v:R).
 Definition Prog := @prog.
 Definition ReturnOp := @Return.
@@ -34,12 +34,12 @@ Definition State := addr -> block.
 
 Inductive step {R:Type} : @progstate R Prog State ->
                           @progstate R Prog State -> Prop :=
-  | StepRead: forall d b rx,
-    step (PS (Read b rx) d)
-         (PS (rx (d b)) d)
-  | StepWrite: forall d b v rx,
-    step (PS (Write b v rx) d)
-         (PS (rx tt) (setidx eq_addr_dec d b v)).
+  | StepRead: forall d a rx,
+    step (PS (Read a rx) d)
+         (PS (rx (d a)) d)
+  | StepWrite: forall d a v rx,
+    step (PS (Write a v rx) d)
+         (PS (rx tt) (setidx eq_addr_dec d a v)).
 Definition Step := @step.
 
 Theorem opp_step_wf:
