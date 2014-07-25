@@ -2,14 +2,14 @@ Require Import ProofIrrelevance.
 
 Definition bool2nat (v : bool) : nat :=
    match v with
+   | false => 0
    | true => 1
-   | _ => 0
    end.
 
 Definition nat2bool (v : nat) : bool :=
    match v with
-   | 1 => true
-   | _ => false
+   | 0 => false
+   | _ => true
    end.
 
 Lemma nat2bool2nat:
@@ -23,7 +23,7 @@ Hint Rewrite nat2bool2nat.
 Definition progseq1 {A B:Type} (a:B->A) (b:B) := a b.
 Definition progseq2 {A B:Type} (a:B->A) (b:B) := a b.
 
-Notation "a ;; b" := (progseq1 a b)
+Notation "a ;; b" := (progseq1 a (fun _: unit => b))
   (right associativity, at level 60) : fscq_scope.
 
 Notation "ra <- a ; b" := (progseq2 a (fun ra => b))

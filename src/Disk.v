@@ -1,56 +1,49 @@
 Require Import CpdtTactics.
 Require Import FsTactics.
-Require Import Storage.
 Require Import Closures.
-Require Import Recdef.
-
-Inductive dprog :=
-  | DRead  (b:block) (rx:value -> dprog)
-  | DWrite (b:block) ( v:value) (rx:dprog)
-  | DHalt.
-
-Bind Scope fscq_scope with dprog.
-
-Record dstate := DSt {
-  DSProg: dprog;
-  DSDisk: storage
-}.
-
-Inductive dstep : dstate -> dstate -> Prop :=
-  | DsmRead: forall d b rx,
-    dstep (DSt (DRead b rx) d)
-            (DSt (rx (st_read d b)) d)
-  | DsmWrite: forall d b v rx,
-    dstep (DSt (DWrite b v rx) d)
-            (DSt rx (st_write d b v)).
-
-Hint Constructors dstep.
+Require Import Util.
+Require Import Smallstep.
+Require Import Arith.
 
 
-Theorem opp_dstep_wf:
-  well_founded (opposite_rel dstep).
+Module Disk <: SmallStepLang.
+
+Parameter Size: nat.
+
+Definition addr := {x:nat | x < Size}.
+Definition block := nat.
+
+Definition eq_addr_dec (a b:addr) : {a=b}+{a<>b}.
+  refine (if eq_nat_dec (proj1_sig a) (proj1_sig b) then _ else _).
+  - left. apply sig_pi. auto.
+  - right. apply sig_pi_ne. auto.
+Defined.
+
+Inductive prog {R:Type} : Type :=
+  | Read (b:addr) (rx:block->prog)
+  | Write (b:addr) (v:block) (rx:unit->prog)
+  | Return (v:R).
+Definition Prog := @prog.
+Definition ReturnOp := @Return.
+Definition State := addr -> block.
+
+Inductive step {R:Type} : @progstate R Prog State ->
+                          @progstate R Prog State -> Prop :=
+  | StepRead: forall d b rx,
+    step (PS (Read b rx) d)
+         (PS (rx (d b)) d)
+  | StepWrite: forall d b v rx,
+    step (PS (Write b v rx) d)
+         (PS (rx tt) (setidx eq_addr_dec d b v)).
+Definition Step := @step.
+
+Theorem opp_step_wf:
+  forall R,
+  well_founded (opposite_rel (@step R)).
 Proof.
-  unfold well_founded; destruct a; generalize_type storage.
-  induction DSProg0; constructor; intros; invert_rel (opposite_rel dstep);
-  destruct_type dstate; crush.
+  intro R. unfold well_founded. destruct a. generalize dependent s.
+  induction p; constructor; intros; invert_rel (opposite_rel (@step R));
+  destruct_type State; crush.
 Qed.
 
-Function dexec (s:dstate) {wf (opposite_rel dstep) s} : dstate :=
-  let (p, dd) := s in
-  match p with
-  | DHalt         => s
-  | DRead b rx    => dexec (DSt (rx (st_read dd b)) dd)
-  | DWrite b v rx => dexec (DSt rx (st_write dd b v))
-  end.
-Proof.
-  - constructor.
-  - constructor.
-  - apply opp_dstep_wf.
-Qed.
-
-Fixpoint drun (p:dprog) (dd:storage) : storage :=
-  match p with
-  | DHalt         => dd
-  | DRead b rx    => drun (rx (st_read dd b)) dd
-  | DWrite b v rx => drun rx (st_write dd b v)
-  end.
+End Disk.

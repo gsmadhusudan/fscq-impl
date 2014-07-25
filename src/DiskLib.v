@@ -4,87 +4,7 @@ Require Import Closures.
 Require Import Util.
 Require Import Arith.
 Require Import Smallstep.
-
-
-(* Common notation *)
-
-Notation "a ;; b" := (progseq1 a (fun _: unit => b))
-  (right associativity, at level 60) : fscq'_scope.
-
-Notation "ra <- a ; b" := (progseq2 a (fun ra => b))
-  (right associativity, at level 60) : fscq'_scope.
-
-Delimit Scope fscq'_scope with fscq'.
-Open Scope fscq'.
-
-
-(* Common infrastructure for nested programs *)
-
-Inductive progstate {R:Type} {P:Type->Type} {S:Type} :=
-  | PS (p:P R) (s:S).
-
-Inductive progreturns {R:Type} {P:Type->Type} {S:Type}
-                      (STEP:@progstate R P S -> @progstate R P S -> Prop)
-                      (RET:R->P R):
-                      P R -> S -> S -> R -> Prop :=
-  | ProgRet: forall (p:P R) (s:S) (s':S) (r:R)
-    (STAR: star STEP (PS p s) (PS (RET r) s')),
-    progreturns STEP RET p s s' r.
-
-Inductive progmatch {R:Type} {P1 P2:Type->Type} {S1 S2:Type}
-                    (COMPILE:P1 R->P2 R)
-                    (MATCH:S1->S2->Prop) :
-                    @progstate R P1 S1 ->
-                    @progstate R P2 S2 -> Prop :=
-  | ProgMatch: forall (p1:P1 R) (p2:P2 R) (s1:S1) (s2:S2)
-    (C: COMPILE p1 = p2)
-    (M: MATCH s1 s2),
-    progmatch COMPILE MATCH (PS p1 s1) (PS p2 s2).
-
-Hint Constructors progmatch.
-
-
-Module Type SmallStepLang.
-
-Parameter Prog: Type->Type.
-Parameter ReturnOp: forall (R:Type), R->(Prog R).
-Parameter State: Type.
-Parameter Step: forall (R:Type), @progstate R (@Prog) State ->
-                                 @progstate R (@Prog) State -> Prop.
-
-End SmallStepLang.
-
-
-Module Type Refines (L1 L2: SmallStepLang).
-
-Parameter Compile: forall (R:Type), L1.Prog R -> L2.Prog R.
-Parameter StateMatch: L1.State -> L2.State -> Prop.
-Axiom FSim: forall R, forward_simulation (L1.Step R) (L2.Step R).
-
-End Refines.
-
-
-Module Disk <: SmallStepLang.
-
-Inductive prog {R:Type} : Type :=
-  | Read (b:nat) (rx:nat->prog)
-  | Write (b:nat) (v:nat) (rx:unit->prog)
-  | Return (v:R).
-Definition Prog := @prog.
-Definition ReturnOp := @Return.
-Definition State := nat -> nat.
-
-Inductive step {R:Type} : @progstate R Prog State ->
-                          @progstate R Prog State -> Prop :=
-  | StepRead: forall d b rx,
-    step (PS (Read b rx) d)
-         (PS (rx (d b)) d)
-  | StepWrite: forall d b v rx,
-    step (PS (Write b v rx) d)
-         (PS (rx tt) (setidx eq_nat_dec d b v)).
-Definition Step := @step.
-
-End Disk.
+Require Import Disk.
 
 
 Module Pair <: SmallStepLang.
@@ -162,34 +82,6 @@ Qed.
 End PairToDisk.
 
 
-Module RefineSelf (L: SmallStepLang) <: Refines L L.
-
-Definition Compile (R:Type) (p:L.Prog R) := p.
-
-Inductive statematch : L.State -> L.State -> Prop :=
-  | Match: forall s, statematch s s.
-Definition StateMatch := statematch.
-Hint Constructors statematch.
-
-Theorem FSim:
-  forall R,
-  forward_simulation (L.Step R) (L.Step R).
-Proof.
-  intros; exists (@progmatch R L.Prog L.Prog L.State L.State (Compile R) statematch); intros.
-
-  repeat match goal with
-  | [ x: progmatch _ _ _ _ |- _ ] => inversion x; clear x; subst
-  | [ x: statematch _ _ |- _ ] => inversion x; clear x; subst
-  end.
-
-  exists A2; split.
-  - eapply star_step; [ apply H | apply star_refl ].
-  - destruct A2. crush.
-Qed.
-
-End RefineSelf.
-
-
 Module Type DualProgType (Left Right:SmallStepLang) <: SmallStepLang.
 
 (* XXX Module system warts: this weird type seems needed for the RefineDual
@@ -262,24 +154,6 @@ Inductive step {R:Type} : @progstate R Prog State ->
 Definition Step := @step.
 
 End DualProg.
-
-
-Module FSimReturn (L1 L2: SmallStepLang)
-                  (Ref12: Refines L1 L2).
-
-(* XXX need to prove that forward simulation implies same return value *)
-
-Theorem fsim_implies_returns:
-  forall (R:Type) p s1 s1' s2 r,
-  progreturns (L1.Step R) (L1.ReturnOp R) p s1 s1' r ->
-  exists s2',
-  progreturns (L2.Step R) (L2.ReturnOp R) (Ref12.Compile R p) s2 s2' r /\
-  Ref12.StateMatch s1' s2'.
-Proof.
-  admit.
-Qed.
-
-End FSimReturn.
 
 
 Module RefineDual (L1 R1 L2 R2: SmallStepLang)
