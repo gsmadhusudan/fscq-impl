@@ -86,8 +86,8 @@ Program Fixpoint Compile {R:Type} (p:BmapStore.Prog R) : (BmapPartDisk.Prog R) :
     BmapPartDisk.Return r
   end.
 
-Definition bmap_match (bl:blockmap) (d:BmapPartDisk.State) (a:blockmapnum) :=
-  forall off, bool2nat (bl off) = d (baddr a off).
+Definition bmap_match (bm:blockmap) (d:BmapPartDisk.State) (a:blockmapnum) :=
+  forall off, bool2nat (bm off) = d (baddr a off).
 
 Inductive statematch : BmapStore.State -> BmapPartDisk.State -> Prop :=
   | Match: forall (bms:BmapStore.State) (d:BmapPartDisk.State)
@@ -96,12 +96,15 @@ Inductive statematch : BmapStore.State -> BmapPartDisk.State -> Prop :=
 Definition StateMatch := statematch.
 Hint Constructors statematch.
 
+Remark zero_le_sizeblock: 0 <= SizeBlock.
+Proof. omega'bmap. Qed.
+
 Lemma star_bmwrite:
-  forall R n Hn a bm rx disk (Hz: 0<=SizeBlock),
+  forall R n Hn a bm rx disk,
   exists disk',
   star (BmapPartDisk.Step R)
     (PS (progseq2 (bmwrite R a n Hn bm) rx) disk)
-    (PS (progseq2 (bmwrite R a 0 Hz bm) rx) disk') /\
+    (PS (progseq2 (bmwrite R a 0 zero_le_sizeblock bm) rx) disk') /\
   (forall off, proj1_sig off < n ->
    disk' (baddr a off) = bool2nat (bm off)) /\
   (forall b, (proj1_sig b < (proj1_sig a) * SizeBlock \/
@@ -121,6 +124,28 @@ Proof.
       repeat resolve_setidx omega'bmap. auto.
 Qed.
 
+Lemma star_bmread:
+  forall R a n Hn bm bmfinal rx disk,
+  bmap_match bmfinal disk a ->
+  (forall off (Hoff: proj1_sig off >= n),
+   bmfinal off = bm off) ->
+  star (BmapPartDisk.Step R)
+    (PS (progseq2 (bmread R a n Hn bm) rx) disk)
+    (PS (rx bmfinal) disk).
+Proof.
+  induction n; intros.
+  - unfold progseq2. unfold bmread.
+    assert (bmfinal=bm) as Hbm. apply functional_extensionality. crush.
+    rewrite Hbm; apply star_refl.
+  - eapply star_step; [constructor|]. fold bmread. cbv beta.
+    apply IHn; auto; intros.
+    destruct (eq_nat_dec (proj1_sig off) n).
+    + repeat resolve_setidx omega'bmap.
+      unfold bmap_match in H. rewrite <- H. rewrite nat2bool2nat.
+      repeat rewrite exist_proj_sig. auto.
+    + repeat resolve_setidx omega'bmap. apply H0. omega'bmap.
+Qed.
+
 Theorem FSim:
   forall R,
   forward_simulation (BmapStore.Step R) (BmapPartDisk.Step R).
@@ -137,12 +162,9 @@ Proof.
   end.
 
   - (* Read *)
-    admit.
-(*
     econstructor; split.
-    + apply star_iread. instantiate (1:=(s1 a)). auto.
-    + constructor; cc.
-*)
+    + apply star_bmread with (bmfinal:=s1 a). crush. intros; omega'bmap.
+    + crush.
 
   - (* Write *)
     edestruct star_bmwrite. Tactics.destruct_pairs.
