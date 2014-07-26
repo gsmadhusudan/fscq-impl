@@ -7,6 +7,7 @@ Require Import Closures.
 Require Import Tactics.
 Require Import FsLayout.
 Require Import Arith.
+Require Import FunctionalExtensionality.
 Open Scope fscq.
 
 
@@ -125,6 +126,80 @@ Inductive statematch : InodeStore.State -> InodePartDisk.State -> Prop :=
 Definition StateMatch := statematch.
 Hint Constructors statematch.
 
+Lemma star_iread_blocklist:
+  forall R a i len rx d (bl:iblocknum->BlocksPartDisk.addr) blfinal Hlen,
+  inode_match i d a ->
+  (forall off (Hoff: (proj1_sig off) >= len),
+   blfinal off = bl off) ->
+  (forall off,
+   proj1_sig (blfinal off) = d (baddr a off)) ->
+  star (InodePartDisk.Step R)
+    (PS (progseq2 (iread_blocklist R a len Hlen bl) rx) d)
+    (PS (rx blfinal) d).
+Proof.
+  induction len.
+  - intros; unfold progseq2; simpl; replace bl with blfinal; [ apply star_refl | ].
+    apply functional_extensionality. crush.
+  - intros.
+    eapply star_step; [ constructor | ].
+    cbv beta.
+    match goal with
+    | [ |- context[lt_dec (d (baddr a ?len)) BlocksPartSize.Size] ] =>
+      destruct (lt_dec (d (baddr a len)) BlocksPartSize.Size)
+    end;
+    apply IHlen; clear IHlen; auto; try omega; intros.
+    + destruct (eq_nat_dec len (proj1_sig off));
+      repeat resolve_setidx omega'inode2.
+      * apply sig_pi. generalize dependent l.
+        repeat rewrite exist_proj_sig. crush.
+      * crush.
+    + destruct n. destruct H.
+      rewrite <- H1. omega'inode2.
+Qed.
+
+Lemma star_iread:
+  forall R a rx disk i,
+  inode_match i disk a ->
+  star (InodePartDisk.Step R)
+    (PS (iread a rx) disk)
+    (PS (rx i) disk).
+Proof.
+  intros.
+  eapply star_step; [ constructor | ].
+  eapply star_step; [ constructor | ].
+  cbv beta.
+  inversion H. Tactics.destruct_pairs.
+
+  assert (forall off, disk (baddr a off) < BlocksPartSize.Size) as Hboff;
+  [ intros; rewrite <- H2; omega'inode2 | ].
+  pose (blfinal:=fun (off:iblocknum) =>
+              exist (fun n: nat => n < NBlockMap * SizeBlock)
+                    (disk (baddr a off))
+                    (Hboff off)).
+  eapply star_trans.
+  - eapply star_iread_blocklist with (blfinal:=blfinal); subst blfinal;
+    cc; omega'inode2.
+  - subst blfinal. cbv beta.
+    destruct (le_dec (disk (laddr a)) NBlockPerInode);
+    [| destruct n; rewrite <- H1; omega' ].
+    match goal with
+    | [ |- star _ (PS (rx ?I1) _) (PS (rx ?I2) _) ] =>
+      assert (I1=I2); [ | subst; apply star_refl ]
+    end.
+    destruct i; simpl in *; rewrite <- H0.
+    match goal with
+    | [ |- Inode ?F1 ?L1 ?B1 = Inode ?F2 ?L2 ?B2 ] =>
+      assert (L1=L2) as Hlen; [ apply sig_pi; cc | rewrite Hlen; clear Hlen ]
+    end.
+    match goal with
+    | [ |- Inode ?F1 ?L1 ?B1 = Inode ?F2 ?L2 ?B2 ] =>
+      assert (B1=B2) as Hblocks; [| cc ]
+    end.
+    apply functional_extensionality; intros.
+    generalize dependent (Hboff x).
+    rewrite <- H2; intros. apply sig_pi. cc.
+Qed.
+
 Lemma star_iwrite_blocklist:
   forall R len a i rx d Hlen,
   exists d',
@@ -171,7 +246,9 @@ Proof.
   end.
 
   - (* Read *)
-    admit.
+    econstructor; split.
+    + apply star_iread. instantiate (1:=(s1 a)). auto.
+    + constructor; cc.
 
   - (* Write *)
     edestruct star_iwrite_blocklist. Tactics.destruct_pairs.

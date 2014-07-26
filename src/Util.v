@@ -125,7 +125,8 @@ Qed.
 
 Ltac resolve_setidx t :=
   repeat rewrite exist_proj_sig;
-  (subst; rewrite setidx_same) || (rewrite setidx_other; [|t]).
+  (subst; rewrite setidx_same) || (rewrite setidx_other; [|t]) ||
+  (subst; rewrite setidxsig_same; [|t]) || (rewrite setidxsig_other; [|t]).
 
 Ltac elim_intact_sig e :=
   match e with
