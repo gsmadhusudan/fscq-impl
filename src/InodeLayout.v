@@ -14,9 +14,6 @@ Definition inodenum := {n: nat | n < NInode}.
 Definition NBlockPerInode := SizeBlock - 2.
 Definition iblocknum := {n: nat | n < NBlockPerInode}.
 
-Ltac unfold_inode := unfold_fslayout; unfold NBlockPerInode in *.
-Ltac omega'inode := omega'unfold unfold_inode.
-
 Definition eq_inodenum_dec (a b:inodenum) : {a=b}+{a<>b}.
   refine (if eq_nat_dec (proj1_sig a) (proj1_sig b) then _ else _).
   - left. apply sig_pi. auto.
@@ -55,12 +52,18 @@ End InodeStore.
 
 Module InodeToDisk <: Refines InodeStore InodePartDisk.
 
+Ltac unfold_inode := unfold_fslayout; unfold NBlockPerInode in *.
+Ltac omega'inode := omega'unfold unfold_inode.
+
 Obligation Tactic := Tactics.program_simpl; omega'inode.
 
 Program Definition faddr (a:inodenum) : InodePartDisk.addr := a * SizeBlock.
 Program Definition laddr (a:inodenum) : InodePartDisk.addr := a * SizeBlock + 1.
 Program Definition baddr (a:inodenum) (off:iblocknum) : InodePartDisk.addr :=
   a * SizeBlock + 2 + off.
+
+Ltac unfold_inode2 := unfold faddr in *; unfold laddr in *; unfold baddr in *; unfold_inode.
+Ltac omega'inode2 := auto; omega'unfold unfold_inode2.
 
 Program Fixpoint iread_blocklist (R:Type) (a:inodenum)
                                  (n:nat) (NOK:n<=NBlockPerInode)
@@ -110,16 +113,47 @@ Fixpoint Compile {R:Type} (p:InodeStore.Prog R) : (InodePartDisk.Prog R) :=
     InodePartDisk.Return r
   end.
 
+Definition inode_match (i:inode) (d:InodePartDisk.State) (a:inodenum) :=
+  IFree i = nat2bool (d (faddr a)) /\
+  proj1_sig (ILen i) = d (laddr a) /\
+  forall off, proj1_sig (IBlocks i off) = d (baddr a off).
+
 Inductive statematch : InodeStore.State -> InodePartDisk.State -> Prop :=
   | Match: forall (i:InodeStore.State) (d:InodePartDisk.State)
-    (MF: forall a, IFree (i a) = nat2bool (d (faddr a)))
-    (ML: forall a, proj1_sig (ILen (i a)) = d (laddr a))
-    (MF: forall a off, proj1_sig (IBlocks (i a) off) = d (baddr a off)),
+    (M: forall a, inode_match (i a) d a),
     statematch i d.
 Definition StateMatch := statematch.
 Hint Constructors statematch.
 
-
+Lemma star_iwrite_blocklist:
+  forall R len a i rx d Hlen,
+  exists d',
+  star (InodePartDisk.Step R)
+    (PS (iwrite_blocklist R a i len Hlen rx) d)
+    (PS rx d') /\
+  (forall off, proj1_sig off < len ->
+   d' (baddr a off) = proj1_sig (IBlocks i off)) /\
+  (forall b, (proj1_sig b < (proj1_sig a) * SizeBlock + 2 \/
+              proj1_sig b >= (proj1_sig a) * SizeBlock + 2 + len) ->
+   d' b = d b).
+Proof.
+  induction len.
+  - eexists; split; intros.
+    + apply star_refl.
+    + crush.
+  - intros.
+    edestruct IHlen; clear IHlen; Tactics.destruct_pairs.
+    eexists. split; [ | split ]; intros.
+    + unfold iwrite_blocklist; fold iwrite_blocklist.
+      eapply star_step; [ constructor | ]. apply H.
+    + destruct (eq_nat_dec (proj1_sig off) len).
+      * subst.
+        rewrite H1; [ | crush ].
+        resolve_setidx omega'inode2; auto.
+      * apply H0. omega'inode2.
+    + rewrite H1; [ | crush ].
+      resolve_setidx omega'inode2. auto.
+Qed.
 
 Theorem FSim:
   forall R,
@@ -136,6 +170,22 @@ Proof.
   | [ x: InodeStore.Step _ _ _ |- _ ] => inversion x; clear x; subst
   end.
 
-Abort.
+  - (* Read *)
+    admit.
+
+  - (* Write *)
+    edestruct star_iwrite_blocklist. Tactics.destruct_pairs.
+    econstructor; split; subst.
+    + eapply star_step; [constructor|].
+      eapply star_step; [constructor|].
+      apply H.
+    + clear H. unfold inode_match in M0.
+      constructor; cc.
+      constructor; [|split]; destruct (eq_inodenum_dec a a0); subst;
+      try (rewrite H1; [|omega'inode2];
+           repeat resolve_setidx omega'inode2; crush; apply M0; fail).
+      intros. rewrite H0; [|omega'inode2]. repeat resolve_setidx omega'inode2. auto.
+      intros. rewrite H1; [|omega'inode2]. repeat resolve_setidx omega'inode2. apply M0.
+Qed.
 
 End InodeToDisk.

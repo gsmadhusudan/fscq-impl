@@ -39,9 +39,11 @@ Module WholeDisk := Disk WholeDiskSize.
 
 
 Ltac omega'unfold unfoldt :=
+  unfoldt;
   repeat clear_sig_exist;
   repeat elim_sigs; intros;
   repeat clear_sig_exist;
+  repeat rewrite exist_proj_sig in *;
   unfoldt;
   subst; simpl in *;
   omega.

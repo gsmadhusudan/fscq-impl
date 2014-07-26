@@ -75,6 +75,13 @@ Proof.
   intros. exists H. auto.
 Qed.
 
+Lemma exist_proj_sig:
+  forall {T:Type} (P:T->Prop) (a:sig P) (H:P (proj1_sig a)),
+  exist P (proj1_sig a) H = a.
+Proof.
+  intros. apply sig_pi. auto.
+Qed.
+
 Definition setidx {K: Type} {V: Type}
                   (eq: forall (a b:K), {a=b}+{a<>b})
                   (db: K->V) (k: K) (v: V) :=
@@ -117,6 +124,7 @@ Proof.
 Qed.
 
 Ltac resolve_setidx t :=
+  repeat rewrite exist_proj_sig;
   (subst; rewrite setidx_same) || (rewrite setidx_other; [|t]).
 
 Ltac elim_intact_sig e :=
