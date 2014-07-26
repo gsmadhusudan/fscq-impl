@@ -18,6 +18,7 @@ FILES = CpdtTactics.v \
 	FsPartsMod.v \
 	FsLayout.v \
 	InodeLayout.v \
+	BmapLayout.v \
 	Balloc.v \
 	FileSpec.v \
 	BufferedFileSpec.v \
