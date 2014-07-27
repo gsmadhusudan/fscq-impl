@@ -19,7 +19,8 @@ FILES = CpdtTactics.v \
 	FsLayout.v \
 	InodeLayout.v \
 	BmapLayout.v \
-	BmapAllocOne.v \
+	BmapAllocOneMod.v \
+	BmapAllocAllMod.v \
 	Balloc.v \
 	FileSpec.v \
 	BufferedFileSpec.v \

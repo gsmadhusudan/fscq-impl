@@ -8,7 +8,7 @@ Require Import FsLayout.
 Require Import Arith.
 Require Import FunctionalExtensionality.
 Require Import BmapLayout.
-Require Import BmapAllocOne.
+Require Import BmapAllocOneMod.
 Open Scope fscq.
 
 
@@ -20,24 +20,24 @@ Inductive prog {R:Type} : Type :=
   | Return (v:R).
 Definition Prog := @prog.
 Definition ReturnOp := @Return.
-Definition State := BlocksPartDisk.addr -> bool.
+Definition State := BlocksPartDisk.addr -> AllocState.
 
 Definition freebit (bm:State) (off:BlocksPartDisk.addr) :=
-  bm off = true.
+  bm off = Avail.
 
 Inductive step {R:Type} : @progstate R Prog State ->
                           @progstate R Prog State -> Prop :=
   | StepAllocOK: forall d off rx,
     highest (freebit d) off ->
     step (PS (Alloc rx) d)
-         (PS (rx (Some off)) (setidx BlocksPartDisk.eq_addr_dec d off false))
+         (PS (rx (Some off)) (setidx BlocksPartDisk.eq_addr_dec d off InUse))
   | StepAllocOut: forall d rx,
     (~exists off, freebit d off) ->
     step (PS (Alloc rx) d)
          (PS (rx None) d)
   | StepFree: forall d off rx,
     step (PS (Free off rx) d)
-         (PS (rx tt) (setidx BlocksPartDisk.eq_addr_dec d off true)).
+         (PS (rx tt) (setidx BlocksPartDisk.eq_addr_dec d off Avail)).
 Definition Step := @step.
 
 End BmapAllocAll.
