@@ -15,6 +15,7 @@ FILES = CpdtTactics.v \
 	Smallstep.v \
 	LoopfreeWF.v \
 	DiskMod.v \
+	LogPartsMod.v \
 	FsPartsMod.v \
 	FsLayout.v \
 	InodeLayout.v \

@@ -101,13 +101,13 @@ Definition Step := @step.
 End FsParts.
 
 
-Module RefineParts (I1 M1 B1: SmallStepLang)
-                   (I2 M2 B2: SmallStepLang)
-                   (P1: FsPartsType I1 M1 B1)
-                   (P2: FsPartsType I2 M2 B2)
-                   (I12: Refines I1 I2)
-                   (M12: Refines M1 M2)
-                   (B12: Refines B1 B2) <: Refines P1 P2.
+Module RefineFsParts (I1 M1 B1: SmallStepLang)
+                     (I2 M2 B2: SmallStepLang)
+                     (P1: FsPartsType I1 M1 B1)
+                     (P2: FsPartsType I2 M2 B2)
+                     (I12: Refines I1 I2)
+                     (M12: Refines M1 M2)
+                     (B12: Refines B1 B2) <: Refines P1 P2.
 
 Module FSR_I := FSimReturn I1 I2 I12.
 Module FSR_M := FSimReturn M1 M2 M12.
@@ -144,4 +144,4 @@ Proof.
     | constructor; [|constructor]; auto ] ).
 Qed.
 
-End RefineParts.
+End RefineFsParts.
