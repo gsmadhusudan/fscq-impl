@@ -21,6 +21,7 @@ FILES = CpdtTactics.v \
 	BmapLayout.v \
 	BmapAllocOneMod.v \
 	BmapAllocAllMod.v \
+	BmapAllocMod.v \
 	Balloc.v \
 	FileSpec.v \
 	BufferedFileSpec.v \
