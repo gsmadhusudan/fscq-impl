@@ -134,26 +134,14 @@ Theorem FSim:
   forall R,
   forward_simulation (P1.Step R) (P2.Step R).
 Proof.
-  intros; fsim_begin (@Compile R) statematch.
-
-  - (* I *)
-    destruct FSR_I.fsim_implies_returns with
-      (R:=R) (p:=p) (s1:=i1) (s1':=s') (s2:=i2) (r:=r); auto. Tactics.destruct_pairs.
-    eexists; split.
-    + eapply star_step; [constructor; eauto|apply star_refl].
-    + constructor; [|constructor]; auto.
-  - (* M *)
-    destruct FSR_M.fsim_implies_returns with
-      (R:=R) (p:=p) (s1:=m1) (s1':=s') (s2:=m2) (r:=r); auto. Tactics.destruct_pairs.
-    eexists; split.
-    + eapply star_step; [constructor; eauto|apply star_refl].
-    + constructor; [|constructor]; auto.
-  - (* B *)
-    destruct FSR_B.fsim_implies_returns with
-      (R:=R) (p:=p) (s1:=b1) (s1':=s') (s2:=b2) (r:=r); auto. Tactics.destruct_pairs.
-    eexists; split.
-    + eapply star_step; [constructor; eauto|apply star_refl].
-    + constructor; [|constructor]; auto.
+  intros; fsim_begin (@Compile R) statematch;
+  [ edestruct FSR_I.fsim_implies_returns
+  | edestruct FSR_M.fsim_implies_returns
+  | edestruct FSR_B.fsim_implies_returns ];
+  eauto; Tactics.destruct_pairs; eexists;
+  ( split;
+    [ eapply star_step; [constructor; eauto|apply star_refl]
+    | constructor; [|constructor]; auto ] ).
 Qed.
 
 End RefineParts.
