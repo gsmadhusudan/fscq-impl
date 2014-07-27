@@ -12,7 +12,7 @@ Open Scope fscq.
 
 
 Definition highest {SigP:nat->Prop} (P:sig SigP->Prop) (a:sig SigP) :=
-  P a /\ ~exists a', proj1_sig a' > proj1_sig a /\ P a'.
+  P a /\ ~exists a', proj1_sig a < proj1_sig a' /\ P a'.
 Definition highest_below {SigP:nat->Prop} (P:sig SigP->Prop) (bound:nat) (a:sig SigP) :=
   @highest SigP (fun x => P x /\ proj1_sig x < bound) a.
 
