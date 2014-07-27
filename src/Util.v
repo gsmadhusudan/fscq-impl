@@ -1,4 +1,8 @@
+Require Import CpdtTactics.
 Require Import ProofIrrelevance.
+Require Import Program.
+Require Import Arith.
+Require Import Omega.
 
 Inductive AllocState := | InUse | Avail.
 
@@ -160,3 +164,42 @@ Ltac clear_sig_exist :=
   | [ |- exist _ _ _ <> exist _ _ _ ] => apply sig_pi_ne
   | [ H: exist _ ?a _ <> exist _ ?b _  |- _ ] => apply sig_ne in H
   end.
+
+Ltac omega'unfold unfoldt :=
+  unfoldt;
+  repeat clear_sig_exist;
+  repeat elim_sigs; intros;
+  repeat clear_sig_exist;
+  repeat rewrite exist_proj_sig in *;
+  unfoldt;
+  subst; simpl in *;
+  omega.
+
+Definition highest {SigP:nat->Prop} (P:sig SigP->Prop) (a:sig SigP) :=
+  P a /\ ~exists a', proj1_sig a < proj1_sig a' /\ P a'.
+Definition highest_below {SigP:nat->Prop} (P:sig SigP->Prop) (bound:nat) (a:sig SigP) :=
+  @highest SigP (fun x => P x /\ proj1_sig x < bound) a.
+
+Lemma highest_below_next:
+  forall SigBound P bound a (Hbound: bound<SigBound),
+  @highest_below (fun x => x < SigBound) P (S bound) a ->
+  ~P (exist _ bound Hbound) ->
+  @highest_below (fun x => x < SigBound) P bound a.
+Proof.
+  intros. destruct H. Tactics.destruct_pairs.
+  destruct (eq_nat_dec bound (proj1_sig a)); subst.
+  - destruct H0. rewrite exist_proj_sig. auto.
+  - split; [split|]; [ auto | omega'unfold idtac | ].
+    unfold not; intros. apply H1.
+    destruct H3. exists x. crush.
+Qed.
+
+Lemma highest_below_bound:
+  forall bound P a,
+  @highest (fun x => x < bound) P a ->
+  @highest_below (fun x => x < bound) P bound a.
+Proof.
+  intros. destruct H.
+  split; [split|]. auto. omega'unfold idtac.
+  unfold not; intros. destruct H0. destruct H1. exists x. crush.
+Qed.

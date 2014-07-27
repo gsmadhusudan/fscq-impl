@@ -38,16 +38,6 @@ Module FsPartsDisk := FsParts InodePartDisk BmapPartDisk BlocksPartDisk.
 Module FsDisk := Disk FsDiskSize.
 
 
-Ltac omega'unfold unfoldt :=
-  unfoldt;
-  repeat clear_sig_exist;
-  repeat elim_sigs; intros;
-  repeat clear_sig_exist;
-  repeat rewrite exist_proj_sig in *;
-  unfoldt;
-  subst; simpl in *;
-  omega.
-
 Ltac unfold_fslayout :=
   unfold FsDiskSize.Size in *;
   unfold InodePartSize.Size in *;
