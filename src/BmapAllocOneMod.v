@@ -180,16 +180,7 @@ Theorem FSim:
   forall R,
   forward_simulation (BmapAllocOne.Step R) (BmapStore.Step R).
 Proof.
-  intros; exists (progmatch Compile statematch); intros.
-
-  repeat match goal with
-  | [ x: progmatch _ _ _ _ |- _ ] => inversion x; clear x; subst
-  | [ x: statematch _ _ |- _ ] => inversion x; clear x; subst
-  end.
-
-  match goal with
-  | [ x: BmapAllocOne.Step _ _ _ |- _ ] => inversion x; clear x; subst
-  end.
+  intros; fsim_begin (@Compile R) statematch.
 
   - (* Alloc Some *)
     econstructor; split.

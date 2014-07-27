@@ -120,3 +120,17 @@ Proof.
 Qed.
 
 End FSimReturn.
+
+
+Ltac fsim_begin Compile statematch :=
+  match goal with
+  | [ |- forward_simulation (?step _) _ ] =>
+    exists (progmatch Compile statematch); intros;
+    repeat match goal with
+    | [ x: progmatch _ _ _ _ |- _ ] => inversion x; clear x; subst
+    | [ x: statematch _ _ |- _ ] => inversion x; clear x; subst
+    end;
+    match goal with
+    | [ x: step _ _ _ |- _ ] => inversion x; clear x; subst
+    end
+  end.

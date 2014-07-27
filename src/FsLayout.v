@@ -143,16 +143,7 @@ Theorem FSim:
   forall R,
   forward_simulation (FsPartsDisk.Step R) (WholeDisk.Step R).
 Proof.
-  intros; exists (progmatch Compile statematch); intros.
-
-  repeat match goal with
-  | [ x: progmatch _ _ _ _ |- _ ] => inversion x; clear x; subst
-  | [ x: statematch _ _ |- _ ] => inversion x; clear x; subst
-  end.
-
-  match goal with
-  | [ x: FsPartsDisk.Step _ _ _ |- _ ] => inversion x; clear x; subst
-  end.
+  intros; fsim_begin (@Compile R) statematch.
 
   - (* I *)
     generalize dependent s2. generalize dependent S.

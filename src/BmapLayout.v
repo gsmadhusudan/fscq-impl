@@ -151,16 +151,7 @@ Theorem FSim:
   forall R,
   forward_simulation (BmapStore.Step R) (BmapPartDisk.Step R).
 Proof.
-  intros; exists (progmatch Compile statematch); intros.
-
-  repeat match goal with
-  | [ x: progmatch _ _ _ _ |- _ ] => inversion x; clear x; subst
-  | [ x: statematch _ _ |- _ ] => inversion x; clear x; subst
-  end.
-
-  match goal with
-  | [ x: BmapStore.Step _ _ _ |- _ ] => inversion x; clear x; subst
-  end.
+  intros; fsim_begin (@Compile R) statematch.
 
   - (* Read *)
     econstructor; split.
