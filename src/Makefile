@@ -20,6 +20,7 @@ FILES = CpdtTactics.v \
 	LogPartsMod.v \
 	LogLayout.v \
 	InodeLayout.v \
+	InodeAllocMod.v \
 	BmapLayout.v \
 	BmapAllocOneMod.v \
 	BmapAllocPairMod.v \
