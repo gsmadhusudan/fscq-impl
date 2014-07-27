@@ -20,7 +20,7 @@ FILES = CpdtTactics.v \
 	InodeLayout.v \
 	BmapLayout.v \
 	BmapAllocOneMod.v \
-	BmapAllocAllMod.v \
+	BmapAllocPairMod.v \
 	BmapAllocMod.v \
 	Balloc.v \
 	FileSpec.v \

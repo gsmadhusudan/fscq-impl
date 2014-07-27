@@ -12,7 +12,7 @@ Require Import BmapAllocOneMod.
 Open Scope fscq.
 
 
-Module BmapAllocAll <: SmallStepLang.
+Module BmapAllocPair <: SmallStepLang.
 
 Inductive prog {R:Type} : Type :=
   | Alloc (rx:option (blockmapnum*blockmapoff)->prog)
@@ -42,10 +42,10 @@ Inductive step {R:Type} : @progstate R Prog State ->
               (setidx eq_blockmapoff_dec (d bn) off Avail))).
 Definition Step := @step.
 
-End BmapAllocAll.
+End BmapAllocPair.
 
 
-Module BmapAllocAllToAllocOne <: Refines BmapAllocAll BmapAllocOne.
+Module BmapAllocPairToAllocOne <: Refines BmapAllocPair BmapAllocOne.
 
 Obligation Tactic := Tactics.program_simpl; omega'.
 
@@ -68,17 +68,17 @@ Program Fixpoint bmalloc (R:Type) (n:nat) (NOK:n<=NBlockMap)
                    (bmalloc R x _ rx)
   end.
 
-Program Fixpoint Compile {R:Type} (p:BmapAllocAll.Prog R) : BmapAllocOne.Prog R :=
+Program Fixpoint Compile {R:Type} (p:BmapAllocPair.Prog R) : BmapAllocOne.Prog R :=
   match p with
-  | BmapAllocAll.Alloc rx =>
+  | BmapAllocPair.Alloc rx =>
     bmalloc R NBlockMap _ (fun x => Compile (rx x))
-  | BmapAllocAll.Free bn off rx =>
+  | BmapAllocPair.Free bn off rx =>
     BmapAllocOne.Free bn off ;; (Compile (rx tt))
-  | BmapAllocAll.Return r =>
+  | BmapAllocPair.Return r =>
     BmapAllocOne.Return r
   end.
 
-Inductive statematch : BmapAllocAll.State -> BmapAllocOne.State -> Prop :=
+Inductive statematch : BmapAllocPair.State -> BmapAllocOne.State -> Prop :=
   | Match: forall s,
     statematch s s.
 Definition StateMatch := statematch.
@@ -126,7 +126,7 @@ Qed.
 
 Theorem FSim:
   forall R,
-  forward_simulation (BmapAllocAll.Step R) (BmapAllocOne.Step R).
+  forward_simulation (BmapAllocPair.Step R) (BmapAllocOne.Step R).
 Proof.
   intros; exists (progmatch Compile statematch); intros.
 
@@ -136,7 +136,7 @@ Proof.
   end.
 
   match goal with
-  | [ x: BmapAllocAll.Step _ _ _ |- _ ] => inversion x; clear x; subst
+  | [ x: BmapAllocPair.Step _ _ _ |- _ ] => inversion x; clear x; subst
   end.
 
   - (* Alloc Some *)
@@ -156,4 +156,4 @@ Proof.
     + crush.
 Qed.
 
-End BmapAllocAllToAllocOne.
+End BmapAllocPairToAllocOne.

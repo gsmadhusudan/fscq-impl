@@ -9,7 +9,7 @@ Require Import Arith.
 Require Import FunctionalExtensionality.
 Require Import BmapLayout.
 Require Import BmapAllocOneMod.
-Require Import BmapAllocAllMod.
+Require Import BmapAllocPairMod.
 Require Import NPeano.
 Open Scope fscq.
 
@@ -45,7 +45,7 @@ Definition Step := @step.
 End BmapAlloc.
 
 
-Module BmapAllocToAllocAll <: Refines BmapAlloc BmapAllocAll.
+Module BmapAllocToAllocPair <: Refines BmapAlloc BmapAllocPair.
 
 Obligation Tactic := idtac.
 
@@ -57,22 +57,22 @@ Program Definition addr2pair (n:BlocksPartDisk.addr) : blockmapnum * blockmapoff
   (n / SizeBlock, n mod SizeBlock).
 Solve Obligations using intros; apply Nat.div_lt_upper_bound || apply Nat.mod_upper_bound; omega'.
 
-Program Fixpoint Compile {R:Type} (p:BmapAlloc.Prog R) : BmapAllocAll.Prog R :=
+Program Fixpoint Compile {R:Type} (p:BmapAlloc.Prog R) : BmapAllocPair.Prog R :=
   match p with
   | BmapAlloc.Alloc rx =>
-    x <- BmapAllocAll.Alloc;
+    x <- BmapAllocPair.Alloc;
     match x with
     | None => Compile (rx None)
     | Some (bn,off) => Compile (rx (Some (pair2addr bn off)))
     end
   | BmapAlloc.Free n rx =>
     let (bn, off) := addr2pair n in
-    BmapAllocAll.Free bn off ;; Compile (rx tt)
+    BmapAllocPair.Free bn off ;; Compile (rx tt)
   | BmapAlloc.Return r =>
-    BmapAllocAll.Return r
+    BmapAllocPair.Return r
   end.
 
-Inductive statematch : BmapAlloc.State -> BmapAllocAll.State -> Prop :=
+Inductive statematch : BmapAlloc.State -> BmapAllocPair.State -> Prop :=
   | Match: forall fs s
     (M: forall bn off, fs (pair2addr bn off) = s bn off),
     statematch fs s.
@@ -81,7 +81,7 @@ Hint Constructors statematch.
 
 Theorem FSim:
   forall R,
-  forward_simulation (BmapAlloc.Step R) (BmapAllocAll.Step R).
+  forward_simulation (BmapAlloc.Step R) (BmapAllocPair.Step R).
 Proof.
   intros; exists (progmatch Compile statematch); intros.
 
@@ -104,4 +104,4 @@ Proof.
     admit.
 Qed.
 
-End BmapAllocToAllocAll.
+End BmapAllocToAllocPair.
