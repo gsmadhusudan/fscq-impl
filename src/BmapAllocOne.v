@@ -32,7 +32,7 @@ Definition ReturnOp := @Return.
 Definition State := blockmapnum -> blockmap.
 
 Definition freebit (bm:blockmap) (off:blockmapoff) :=
-  bm off = true.
+  bm off = Avail.
 
 Inductive step {R:Type} : @progstate R Prog State ->
                           @progstate R Prog State -> Prop :=
@@ -40,7 +40,7 @@ Inductive step {R:Type} : @progstate R Prog State ->
     highest (freebit (d a)) off ->
     step (PS (Alloc a rx) d)
          (PS (rx (Some off)) (setidx eq_blockmapnum_dec d a
-                              (setidx eq_blockmapoff_dec (d a) off false)))
+                              (setidx eq_blockmapoff_dec (d a) off InUse)))
   | StepAllocOut: forall d a rx,
     (~exists off, freebit (d a) off) ->
     step (PS (Alloc a rx) d)
@@ -48,7 +48,7 @@ Inductive step {R:Type} : @progstate R Prog State ->
   | StepFree: forall d a off rx,
     step (PS (Free a off rx) d)
          (PS (rx tt) (setidx eq_blockmapnum_dec d a
-                      (setidx eq_blockmapoff_dec (d a) off true))).
+                      (setidx eq_blockmapoff_dec (d a) off Avail))).
 Definition Step := @step.
 
 End BmapAllocOne.
@@ -58,7 +58,67 @@ Module BmapAllocOneToStore <: Refines BmapAllocOne BmapStore.
 
 Obligation Tactic := Tactics.program_simpl; omega'.
 
-(* XXX *)
+Fixpoint bmfree (R:Type) (a:blockmapnum) (off:blockmapoff) rx :
+                BmapStore.Prog R :=
+  bm <- BmapStore.Read a;
+  BmapStore.Write a (setidx eq_blockmapoff_dec bm off Avail);;
+  rx.
 
+Program Fixpoint bmalloc (R:Type) (a:blockmapnum)
+                         (n:nat) (NOK:n<=SizeBlock)
+                         (rx:option blockmapoff->BmapStore.Prog R) :
+                         BmapStore.Prog R :=
+  match n with
+  | O => rx None
+  | S x =>
+    bm <- BmapStore.Read a;
+    match bm x with
+    | InUse => bmalloc R a x _ rx
+    | Avail =>
+      BmapStore.Write a (setidx eq_blockmapoff_dec bm x InUse);;
+      rx (Some x)
+    end
+  end.
+
+Program Fixpoint Compile {R:Type} (p:BmapAllocOne.Prog R) : (BmapStore.Prog R) :=
+  match p with
+  | BmapAllocOne.Alloc a rx =>
+    bmalloc R a SizeBlock _ (fun ob => Compile (rx ob))
+  | BmapAllocOne.Free a off rx =>
+    bmfree R a off (Compile (rx tt))
+  | BmapAllocOne.Return r =>
+    BmapStore.Return r
+  end.
+
+Inductive statematch : BmapAllocOne.State -> BmapStore.State -> Prop :=
+  | Match: forall s,
+    statematch s s.
+Definition StateMatch := statematch.
+Hint Constructors statematch.
+
+Theorem FSim:
+  forall R,
+  forward_simulation (BmapAllocOne.Step R) (BmapStore.Step R).
+Proof.
+  intros; exists (progmatch Compile statematch); intros.
+
+  repeat match goal with
+  | [ x: progmatch _ _ _ _ |- _ ] => inversion x; clear x; subst
+  | [ x: statematch _ _ |- _ ] => inversion x; clear x; subst
+  end.
+
+  match goal with
+  | [ x: BmapAllocOne.Step _ _ _ |- _ ] => inversion x; clear x; subst
+  end.
+
+  - (* Alloc Some *)
+    admit.
+
+  - (* Alloc None *)
+    admit.
+
+  - (* Free *)
+    admit.
+Qed.
 
 End BmapAllocOneToStore.
