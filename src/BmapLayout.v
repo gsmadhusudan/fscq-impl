@@ -13,13 +13,14 @@ Open Scope fscq.
 
 Definition blockmapnum := {n: nat | n < NBlockMap}.
 Definition blockmapoff := {n: nat | n < SizeBlock}.
-Definition blockmap := blockmapoff -> bool.
+Definition blockmap := blockmapoff -> AllocState.
 
 Definition eq_blockmapnum_dec (a b:blockmapnum) : {a=b}+{a<>b}.
   refine (if eq_nat_dec (proj1_sig a) (proj1_sig b) then _ else _).
   - left. apply sig_pi. auto.
   - right. apply sig_pi_ne. auto.
 Defined.
+
 
 Module BmapStore <: SmallStepLang.
 
@@ -62,7 +63,7 @@ Program Fixpoint bmread (R:Type) (a:blockmapnum)
   | 0 => rx bm
   | S x =>
     f <- BmapPartDisk.Read (baddr a x);
-    bmread R a x _ (setidxsig eq_nat_dec bm x (nat2bool f)) rx
+    bmread R a x _ (setidxsig eq_nat_dec bm x (nat2alloc f)) rx
   end.
 
 Program Fixpoint bmwrite (R:Type) (a:blockmapnum)
@@ -72,14 +73,14 @@ Program Fixpoint bmwrite (R:Type) (a:blockmapnum)
   match n with
   | 0 => rx
   | S x =>
-    BmapPartDisk.Write (baddr a x) (bool2nat (bm x));;
+    BmapPartDisk.Write (baddr a x) (alloc2nat (bm x));;
     bmwrite R a x _ bm rx
   end.
 
 Program Fixpoint Compile {R:Type} (p:BmapStore.Prog R) : (BmapPartDisk.Prog R) :=
   match p with
   | BmapStore.Read a rx =>
-    bmread R a SizeBlock _ (fun _ => true) (fun bm => Compile (rx bm))
+    bmread R a SizeBlock _ (fun _ => InUse) (fun bm => Compile (rx bm))
   | BmapStore.Write a bm rx =>
     bmwrite R a SizeBlock _ bm (Compile (rx tt))
   | BmapStore.Return r =>
@@ -87,7 +88,7 @@ Program Fixpoint Compile {R:Type} (p:BmapStore.Prog R) : (BmapPartDisk.Prog R) :
   end.
 
 Definition bmap_match (bm:blockmap) (d:BmapPartDisk.State) (a:blockmapnum) :=
-  forall off, bool2nat (bm off) = d (baddr a off).
+  forall off, alloc2nat (bm off) = d (baddr a off).
 
 Inductive statematch : BmapStore.State -> BmapPartDisk.State -> Prop :=
   | Match: forall (bms:BmapStore.State) (d:BmapPartDisk.State)
@@ -106,7 +107,7 @@ Lemma star_bmwrite:
     (PS (progseq2 (bmwrite R a n Hn bm) rx) disk)
     (PS (progseq2 (bmwrite R a 0 zero_le_sizeblock bm) rx) disk') /\
   (forall off, proj1_sig off < n ->
-   disk' (baddr a off) = bool2nat (bm off)) /\
+   disk' (baddr a off) = alloc2nat (bm off)) /\
   (forall b, (proj1_sig b < (proj1_sig a) * SizeBlock \/
               proj1_sig b >= (proj1_sig a) * SizeBlock + n) ->
    disk' b = disk b).
@@ -141,8 +142,8 @@ Proof.
     apply IHn; auto; intros.
     destruct (eq_nat_dec (proj1_sig off) n).
     + repeat resolve_setidx omega'bmap.
-      unfold bmap_match in H. rewrite <- H. rewrite nat2bool2nat.
-      repeat rewrite exist_proj_sig. auto.
+      unfold bmap_match in H. rewrite <- H.
+      repeat rewrite exist_proj_sig. crush.
     + repeat resolve_setidx omega'bmap. apply H0. omega'bmap.
 Qed.
 

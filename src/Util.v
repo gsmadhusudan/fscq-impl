@@ -1,24 +1,26 @@
 Require Import ProofIrrelevance.
 
-Definition bool2nat (v : bool) : nat :=
+Inductive AllocState := | InUse | Avail.
+
+Definition alloc2nat (v : AllocState) : nat :=
    match v with
-   | false => 0
-   | true => 1
+   | Avail => 0
+   | InUse => 1
    end.
 
-Definition nat2bool (v : nat) : bool :=
+Definition nat2alloc (v : nat) : AllocState :=
    match v with
-   | 0 => false
-   | _ => true
+   | 0 => Avail
+   | _ => InUse
    end.
 
-Lemma nat2bool2nat:
+Lemma nat2alloc2nat:
   forall b,
-  nat2bool (bool2nat b) = b.
+  nat2alloc (alloc2nat b) = b.
 Proof.
   destruct b; auto.
 Qed.
-Hint Rewrite nat2bool2nat.
+Hint Rewrite nat2alloc2nat.
 
 Definition progseq1 {A B:Type} (a:B->A) (b:B) := a b.
 Definition progseq2 {A B:Type} (a:B->A) (b:B) := a b.

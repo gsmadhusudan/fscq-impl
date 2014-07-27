@@ -22,7 +22,7 @@ Definition eq_inodenum_dec (a b:inodenum) : {a=b}+{a<>b}.
 Defined.
 
 Record inode := Inode {
-  IFree: bool;
+  IFree: AllocState;
   ILen: { l: nat | l <= NBlockPerInode };  (* in blocks *)
   IBlocks: iblocknum -> BlocksPartDisk.addr
 }.
@@ -85,9 +85,9 @@ Program Definition iread {R:Type} (a:inodenum) rx : InodePartDisk.Prog R :=
   len <- InodePartDisk.Read (laddr a);
   bl <- @iread_blocklist R a NBlockPerInode _ (fun _ => 0);
   if le_dec len NBlockPerInode then
-    rx (Inode (nat2bool free) len bl)
+    rx (Inode (nat2alloc free) len bl)
   else
-    rx (Inode (nat2bool free) 0 bl).
+    rx (Inode (nat2alloc free) 0 bl).
 
 Program Fixpoint iwrite_blocklist (R:Type) (a:inodenum) (i:inode)
                                   (n:nat) (NOK:n<=NBlockPerInode) rx :
@@ -100,7 +100,7 @@ Program Fixpoint iwrite_blocklist (R:Type) (a:inodenum) (i:inode)
   end.
 
 Program Definition iwrite {R:Type} (a:inodenum) (i:inode) rx : InodePartDisk.Prog R :=
-  InodePartDisk.Write (faddr a) (bool2nat (IFree i));;
+  InodePartDisk.Write (faddr a) (alloc2nat (IFree i));;
   InodePartDisk.Write (laddr a) (ILen i);;
   @iwrite_blocklist R a i NBlockPerInode _ rx.
 
@@ -115,7 +115,7 @@ Fixpoint Compile {R:Type} (p:InodeStore.Prog R) : (InodePartDisk.Prog R) :=
   end.
 
 Definition inode_match (i:inode) (d:InodePartDisk.State) (a:inodenum) :=
-  IFree i = nat2bool (d (faddr a)) /\
+  IFree i = nat2alloc (d (faddr a)) /\
   proj1_sig (ILen i) = d (laddr a) /\
   forall off, proj1_sig (IBlocks i off) = d (baddr a off).
 
