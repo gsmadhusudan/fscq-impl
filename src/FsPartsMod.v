@@ -48,16 +48,16 @@ Definition State := state.
 
 Inductive step {R:Type} : @progstate R Prog State ->
                           @progstate R Prog State -> Prop :=
-  | StepI: forall p rx s s' m b r
-    (S: progreturns (Inode.Step R) (Inode.ReturnOp R) p s s' r),
+  | StepI: forall (T:Type) p (rx:T->Prog R) s s' m b r
+    (S: progreturns (Inode.Step T) (Inode.ReturnOp T) p s s' r),
     step (PS (I p rx) (PartState s m b))
          (PS (rx r) (PartState s' m b))
-  | StepM: forall p rx s s' i b r
-    (S: progreturns (Bmap.Step R) (Bmap.ReturnOp R) p s s' r),
+  | StepM: forall (T:Type) p (rx:T->Prog R) s s' i b r
+    (S: progreturns (Bmap.Step T) (Bmap.ReturnOp T) p s s' r),
     step (PS (M p rx) (PartState i s b))
          (PS (rx r) (PartState i s' b))
-  | StepB: forall p rx s s' i m r
-    (S: progreturns (Blocks.Step R) (Blocks.ReturnOp R) p s s' r),
+  | StepB: forall (T:Type) p (rx:T->Prog R) s s' i m r
+    (S: progreturns (Blocks.Step T) (Blocks.ReturnOp T) p s s' r),
     step (PS (B p rx) (PartState i m s))
          (PS (rx r) (PartState i m s')).
 Definition Step := @step.
@@ -84,16 +84,16 @@ Definition State := state.
 
 Inductive step {R:Type} : @progstate R Prog State ->
                           @progstate R Prog State -> Prop :=
-  | StepI: forall p rx s s' m b r
-    (S: progreturns (Inode.Step R) (Inode.ReturnOp R) p s s' r),
+  | StepI: forall (T:Type) p (rx:T->Prog R) s s' m b r
+    (S: progreturns (Inode.Step T) (Inode.ReturnOp T) p s s' r),
     step (PS (I p rx) (PartState s m b))
          (PS (rx r) (PartState s' m b))
-  | StepM: forall p rx s s' i b r
-    (S: progreturns (Bmap.Step R) (Bmap.ReturnOp R) p s s' r),
+  | StepM: forall (T:Type) p (rx:T->Prog R) s s' i b r
+    (S: progreturns (Bmap.Step T) (Bmap.ReturnOp T) p s s' r),
     step (PS (M p rx) (PartState i s b))
          (PS (rx r) (PartState i s' b))
-  | StepB: forall p rx s s' i m r
-    (S: progreturns (Blocks.Step R) (Blocks.ReturnOp R) p s s' r),
+  | StepB: forall (T:Type) p (rx:T->Prog R) s s' i m r
+    (S: progreturns (Blocks.Step T) (Blocks.ReturnOp T) p s s' r),
     step (PS (B p rx) (PartState i m s))
          (PS (rx r) (PartState i m s')).
 Definition Step := @step.

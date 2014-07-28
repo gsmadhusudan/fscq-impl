@@ -144,7 +144,7 @@ Proof.
     + intros; simpl;
       edestruct H; inversion S; clear S;
       match goal with
-      | [ H: star (?STEP R) _ _ |- _ ] =>
+      | [ H: star (?STEP T) _ _ |- _ ] =>
         inversion H; match goal with
         | [ Hstep: STEP _ _ _ |- _ ] => inversion Hstep
         end
@@ -158,7 +158,7 @@ Proof.
     + intros; simpl;
       edestruct H; inversion S; clear S;
       match goal with
-      | [ H: star (?STEP R) _ _ |- _ ] =>
+      | [ H: star (?STEP T) _ _ |- _ ] =>
         inversion H; match goal with
         | [ Hstep: STEP _ _ _ |- _ ] => inversion Hstep
         end
@@ -172,7 +172,7 @@ Proof.
     + intros; simpl;
       inversion S; clear S; subst.
       inversion STAR; [| match goal with
-                         | [ H: _ R (PS (_ v) _) _ |- _ ] => inversion H
+                         | [ H: _ T (PS (_ v) _) _ |- _ ] => inversion H
                          end ].
       eexists; split; [ apply star_refl | constructor; crush ].
 
@@ -186,7 +186,7 @@ Proof.
     + intros; simpl;
       edestruct H; inversion S; clear S;
       match goal with
-      | [ H: star (?STEP R) _ _ |- _ ] =>
+      | [ H: star (?STEP T) _ _ |- _ ] =>
         inversion H; match goal with
         | [ Hstep: STEP _ _ _ |- _ ] => inversion Hstep
         end
@@ -201,7 +201,7 @@ Proof.
     + intros; simpl;
       edestruct H; inversion S; clear S;
       match goal with
-      | [ H: star (?STEP R) _ _ |- _ ] =>
+      | [ H: star (?STEP T) _ _ |- _ ] =>
         inversion H; match goal with
         | [ Hstep: STEP _ _ _ |- _ ] => inversion Hstep
         end
@@ -216,7 +216,7 @@ Proof.
     + intros; simpl;
       inversion S; clear S; subst.
       inversion STAR; [| match goal with
-                         | [ H: _ R (PS (_ v) _) _ |- _ ] => inversion H
+                         | [ H: _ T (PS (_ v) _) _ |- _ ] => inversion H
                          end ].
       eexists; split; [ apply star_refl | constructor; crush ].
 
@@ -230,7 +230,7 @@ Proof.
     + intros; simpl;
       edestruct H; inversion S; clear S;
       match goal with
-      | [ H: star (?STEP R) _ _ |- _ ] =>
+      | [ H: star (?STEP T) _ _ |- _ ] =>
         inversion H; match goal with
         | [ Hstep: STEP _ _ _ |- _ ] => inversion Hstep
         end
@@ -245,7 +245,7 @@ Proof.
     + intros; simpl;
       edestruct H; inversion S; clear S;
       match goal with
-      | [ H: star (?STEP R) _ _ |- _ ] =>
+      | [ H: star (?STEP T) _ _ |- _ ] =>
         inversion H; match goal with
         | [ Hstep: STEP _ _ _ |- _ ] => inversion Hstep
         end
@@ -260,7 +260,7 @@ Proof.
     + intros; simpl;
       inversion S; clear S; subst.
       inversion STAR; [| match goal with
-                         | [ H: _ R (PS (_ v) _) _ |- _ ] => inversion H
+                         | [ H: _ T (PS (_ v) _) _ |- _ ] => inversion H
                          end ].
       eexists; split; [ apply star_refl | constructor; crush ].
 Qed.

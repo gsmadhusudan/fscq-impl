@@ -28,12 +28,12 @@ Definition State := state.
 
 Inductive step {R:Type} : @progstate R Prog State ->
                           @progstate R Prog State -> Prop :=
-  | StepL: forall p rx s s' d r
-    (S: progreturns (Log.Step R) (Log.ReturnOp R) p s s' r),
+  | StepL: forall (T:Type) p (rx:T->Prog R) s s' d r
+    (S: progreturns (Log.Step T) (Log.ReturnOp T) p s s' r),
     step (PS (L p rx) (PartState s d))
          (PS (rx r) (PartState s' d))
-  | StepD: forall p rx s s' l r
-    (S: progreturns (Data.Step R) (Data.ReturnOp R) p s s' r),
+  | StepD: forall (T:Type) p (rx:T->Prog R) s s' l r
+    (S: progreturns (Data.Step T) (Data.ReturnOp T) p s s' r),
     step (PS (D p rx) (PartState l s))
          (PS (rx r) (PartState l s')).
 Definition Step := @step.
@@ -58,12 +58,12 @@ Definition State := state.
 
 Inductive step {R:Type} : @progstate R Prog State ->
                           @progstate R Prog State -> Prop :=
-  | StepL: forall p rx s s' d r
-    (S: progreturns (Log.Step R) (Log.ReturnOp R) p s s' r),
+  | StepL: forall (T:Type) p (rx:T->Prog R) s s' d r
+    (S: progreturns (Log.Step T) (Log.ReturnOp T) p s s' r),
     step (PS (L p rx) (PartState s d))
          (PS (rx r) (PartState s' d))
-  | StepD: forall p rx s s' l r
-    (S: progreturns (Data.Step R) (Data.ReturnOp R) p s s' r),
+  | StepD: forall (T:Type) p (rx:T->Prog R) s s' l r
+    (S: progreturns (Data.Step T) (Data.ReturnOp T) p s s' r),
     step (PS (D p rx) (PartState l s))
          (PS (rx r) (PartState l s')).
 Definition Step := @step.
