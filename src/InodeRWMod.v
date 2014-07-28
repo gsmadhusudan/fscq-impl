@@ -157,7 +157,13 @@ Inductive statematch : InodeRW.State -> FsPartsTop.State -> Prop :=
     (MLen: forall inum, FLen (f inum) = ILen (i inum))
     (MData: forall inum off,
      proj1_sig off < proj1_sig (FLen (f inum)) ->
-     FData (f inum) off = b (IBlocks (i inum) off)),
+     FData (f inum) off = b (IBlocks (i inum) off))
+    (DisjointSame: forall inum off (Hoff: proj1_sig off < proj1_sig (ILen (i inum))),
+     ~exists off' (Hoff': proj1_sig off' < proj1_sig (ILen (i inum))),
+     off <> off' -> IBlocks (i inum) off = IBlocks (i inum) off')
+    (DisjointOther: forall inum off (Hoff: proj1_sig off < proj1_sig (ILen (i inum))),
+     ~exists inum' off' (Hoff': proj1_sig off' < proj1_sig (ILen (i inum'))),
+     inum <> inum' -> IBlocks (i inum) off = IBlocks (i inum) off'),
     statematch f (FsPartsTop.PartState i m b).
 Definition StateMatch := statematch.
 Hint Constructors statematch.
@@ -170,57 +176,82 @@ Theorem FSim:
 Proof.
   intros; fsim_begin (@Compile R) statematch.
 
+Ltac unfold_inner_step := match goal with
+  | [ |- star _ (PS (progseq1 _ _) _) _ ] => eapply star_step; [constructor|cbv beta]
+  | [ |- star _ (PS (progseq2 _ _) _) _ ] => eapply star_step; [constructor|cbv beta]
+  | [ |- star _ (PS (?ret _) _) _ ] => apply star_refl
+  end.
+
+Ltac unfold_outer_step := match goal with
+  | [ |- star (FsPartsTop.Step _) (PS (Compile (_ _)) _) _ ] =>
+    apply star_refl
+  | [ |- star (FsPartsTop.Step _) (PS (progseq1 _ _) _) _ ] =>
+    eapply star_step; [constructor;constructor;repeat unfold_inner_step|]
+  | [ |- star (FsPartsTop.Step _) (PS (progseq2 _ _) _) _ ] =>
+    eapply star_step; [constructor;constructor;repeat unfold_inner_step|]
+  end.
+
+Ltac unfold_outer_steps R := unfold Compile; fold (@Compile R); repeat unfold_outer_step.
+
   - (* Read *)
-    econstructor; split.
-    + unfold Compile; fold (@Compile R).
-      eapply star_step;
-      [ constructor;
-        constructor; (* invert progreturns *)
-        eapply star_step; [constructor|]; (* inode program *)
-        apply star_refl |].
-      eapply star_step;
-      [ constructor;
-        constructor; (* invert progreturns *)
-        eapply star_step; [constructor|]; (* blocks program *)
-        apply star_refl |].
-      apply star_refl.
-    + crush.
+    econstructor; split; [unfold_outer_steps R|].
+    crush.
 
   - (* Write *)
-    econstructor; split.
-    + unfold Compile; fold (@Compile R).
-      eapply star_step;
-      [ constructor;
-        constructor; (* invert progreturns *)
-        eapply star_step; [constructor|]; (* inode program *)
-        apply star_refl |].
-      eapply star_step;
-      [ constructor;
-        constructor; (* invert progreturns *)
-        eapply star_step; [constructor|]; (* blocks program *)
-        apply star_refl |].
-      apply star_refl.
-    + constructor; auto.
-      constructor; intros; destruct (eq_inodenum_dec inum inum0); subst;
-      repeat resolve_setidx auto_omega'; crush.
+    econstructor; split; [unfold_outer_steps R|].
+    constructor; auto; constructor; intros.
+    + destruct (eq_inodenum_dec inum inum0); repeat resolve_setidx auto_omega'; crush.
+    + destruct (eq_inodenum_dec inum inum0); repeat resolve_setidx auto_omega'; crush.
+    + destruct (eq_inodenum_dec inum inum0); repeat resolve_setidx auto_omega'; simpl.
       * destruct (eq_iblocknum_dec off off0); subst; repeat resolve_setidx auto_omega'; auto.
         (* XXX need an extra condition: all block addrs in an inode are distinct *)
-      * admit.
-        (* XXX need an extra condition: block addrs between inodes are distinct *)
+        admit.
+      * (* XXX need an extra condition: block addrs between inodes are distinct *)
+        admit.
+    + admit.
+    + admit.
 
   - (* Alloc OK *)
-    admit.
+    econstructor; split; [unfold_outer_steps R|].
+    instantiate (1:=inum).
+    unfold highest in *; unfold InodeRW.freeinode in *; unfold InodeAlloc.freeinode in *.
+    Tactics.destruct_pairs; split; [crush|]. unfold not; intros; apply H0; clear H0.
+    destruct H1 as [inum' H1]. exists inum'. crush.
+
+    constructor; auto; constructor; intros.
+    + admit.
+    + admit.
+    + admit.
+    + admit.
+    + admit.
 
   - (* Alloc fail *)
+    (* XXX unfold_outer_steps does not work, because we need to choose the right
+     * constructor for InodeAlloc.Alloc (the one that fails, rather than the one that
+     * succeeds)..
+     *)
     admit.
 
   - (* Free *)
-    admit.
+    econstructor; split; [unfold_outer_steps R|].
+    constructor; auto; constructor; intros.
+    + admit.
+    + admit.
+    + admit.
+    + admit.
+    + admit.
 
   - (* Shrink *)
-    admit.
+    econstructor; split; [unfold_outer_steps R|].
+    constructor; auto; constructor; intros.
+    + admit.
+    + admit.
+    + admit.
+    + admit.
+    + admit.
 
   - (* Grow OK *)
+    (* XXX unfold_outer_steps does not work because of a match in the rx *)
     admit.
 Qed.
 
