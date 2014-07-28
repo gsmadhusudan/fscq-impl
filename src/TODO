@@ -15,3 +15,13 @@ Perhaps cleanly represent the following refinement pattern:
   some operations are introduced, with new semantics
   (e.g., BmapAllocOne -> BmapAllocAll)
 
+Do we really need Free in InodeAlloc?  InodeRW writes Avail to the inode anyway.
+
+Non-determinism comes up again: when does growing a file fail (InodeRW)?
+  Making grow failure deterministic requires putting the blockmap allocator state
+  in InodeRW, even though it's not really that interesting/relevant there.
+
+It's annoying having to implement cases that are undefined behavior in semantics.
+  E.g., InodeRW.Shrink requires len to be a particular value, but the Compile
+  function cannot reason about this, and has to handle any len..
+

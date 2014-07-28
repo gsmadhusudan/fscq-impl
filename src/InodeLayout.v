@@ -14,6 +14,7 @@ Open Scope fscq.
 Definition inodenum := {n: nat | n < NInode}.
 Definition NBlockPerInode := SizeBlock - 2.
 Definition iblocknum := {n: nat | n < NBlockPerInode}.
+Definition ilength := {n: nat | n <= NBlockPerInode}.
 
 Definition eq_inodenum_dec (a b:inodenum) : {a=b}+{a<>b}.
   refine (if eq_nat_dec (proj1_sig a) (proj1_sig b) then _ else _).
@@ -23,7 +24,7 @@ Defined.
 
 Record inode := Inode {
   IFree: AllocState;
-  ILen: { l: nat | l <= NBlockPerInode };  (* in blocks *)
+  ILen: ilength;  (* in blocks *)
   IBlocks: iblocknum -> BlocksPartDisk.addr
 }.
 
