@@ -104,6 +104,31 @@ Qed.
 End RefineSelf.
 
 
+Module RefineChain (L1 L2 L3: SmallStepLang)
+                   (Ref12: Refines L1 L2)
+                   (Ref23: Refines L2 L3) <: Refines L1 L3.
+
+Definition Compile (R:Type) (p:L1.Prog R) :=
+  Ref23.Compile R (Ref12.Compile R p).
+
+Inductive statematch : L1.State -> L3.State -> Prop :=
+  | Match: forall s1 s3,
+    (exists s2, Ref12.StateMatch s1 s2 /\ Ref23.StateMatch s2 s3) ->
+    statematch s1 s3.
+Definition StateMatch := statematch.
+Hint Constructors statematch.
+
+Theorem FSim:
+  forall R,
+  forward_simulation (L1.Step R) (L3.Step R).
+Proof.
+  intros; exists (@progmatch R L1.Prog L3.Prog L1.State L3.State (Compile R) statematch); intros.
+  admit.
+Qed.
+
+End RefineChain.
+
+
 Module FSimReturn (L1 L2: SmallStepLang)
                   (Ref12: Refines L1 L2).
 
