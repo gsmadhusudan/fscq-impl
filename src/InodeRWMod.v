@@ -59,7 +59,7 @@ Inductive step {R:Type} : @progstate R Prog State ->
   | StepRead: forall inum off rx d,
     step (PS (Read inum off rx) d)
          (PS (rx (FData (d inum) off)) d)
-  | StepWrite: forall inum off b rx d,
+  | StepWrite: forall inum off b rx d ,
     step (PS (Write inum off b rx) d)
          (PS (rx tt) (setidx eq_inodenum_dec d inum
                       (File (FFree (d inum))
@@ -107,12 +107,12 @@ Module InodeRWToFsPartsTop <: Refines InodeRW FsPartsTop.
 Program Fixpoint Compile {R:Type} (p:InodeRW.Prog R) : (FsPartsTop.Prog R) :=
   match p with
   | InodeRW.Read inum off rx =>
-    i <- FsPartsTop.I (v <- InodeAlloc.Read inum; InodeAlloc.Return v);
-    b <- FsPartsTop.B (v <- BlocksPartDisk.Read (IBlocks i off); BlocksPartDisk.Return v);
+    n <- FsPartsTop.I (i <- InodeAlloc.Read inum; InodeAlloc.Return (IBlocks i off));
+    b <- FsPartsTop.B (v <- BlocksPartDisk.Read n; BlocksPartDisk.Return v);
     Compile (rx b)
   | InodeRW.Write inum off b rx =>
-    i <- FsPartsTop.I (v <- InodeAlloc.Read inum; InodeAlloc.Return v);
-    FsPartsTop.B (BlocksPartDisk.Write (IBlocks i off) b;; BlocksPartDisk.Return tt);;
+    n <- FsPartsTop.I (i <- InodeAlloc.Read inum; InodeAlloc.Return (IBlocks i off));
+    FsPartsTop.B (BlocksPartDisk.Write n b;; BlocksPartDisk.Return tt);;
     Compile (rx tt)
   | InodeRW.Alloc rx =>
     oi <- FsPartsTop.I (v <- InodeAlloc.Alloc;
@@ -148,5 +148,55 @@ Program Fixpoint Compile {R:Type} (p:InodeRW.Prog R) : (FsPartsTop.Prog R) :=
     end
   | InodeRW.Return v => FsPartsTop.Return v
   end.
+
+Inductive statematch : InodeRW.State -> FsPartsTop.State -> Prop :=
+  | Match: forall f i m b
+    (MFree: forall inum, FFree (f inum) = IFree (i inum))
+    (MLen: forall inum, FLen (f inum) = ILen (i inum))
+    (MData: forall inum off, FData (f inum) off = b (IBlocks (i inum) off)),
+    statematch f (FsPartsTop.PartState i m b).
+Definition StateMatch := statematch.
+Hint Constructors statematch.
+
+Theorem FSim:
+  forall R,
+  forward_simulation (InodeRW.Step R) (FsPartsTop.Step R).
+Proof.
+  intros; fsim_begin (@Compile R) statematch.
+
+  - (* Read *)
+    econstructor; split.
+    + unfold Compile; fold (@Compile R).
+      eapply star_step;
+      [ constructor;
+        constructor; (* invert progreturns *)
+        eapply star_step; [constructor|]; (* inode program *)
+        apply star_refl |].
+      eapply star_step;
+      [ constructor;
+        constructor; (* invert progreturns *)
+        eapply star_step; [constructor|]; (* blocks program *)
+        apply star_refl |].
+      apply star_refl.
+    + crush.
+
+  - (* Write *)
+    admit.
+
+  - (* Alloc OK *)
+    admit.
+
+  - (* Alloc fail *)
+    admit.
+
+  - (* Free *)
+    admit.
+
+  - (* Shrink *)
+    admit.
+
+  - (* Grow OK *)
+    admit.
+Qed.
 
 End InodeRWToFsPartsTop.
