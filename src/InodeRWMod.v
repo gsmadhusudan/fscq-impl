@@ -57,9 +57,11 @@ Definition empty_block : BlocksPartDisk.block := 0.
 Inductive step {R:Type} : @progstate R Prog State ->
                           @progstate R Prog State -> Prop :=
   | StepRead: forall inum off rx d,
+    proj1_sig off < proj1_sig (FLen (d inum)) ->
     step (PS (Read inum off rx) d)
          (PS (rx (FData (d inum) off)) d)
-  | StepWrite: forall inum off b rx d ,
+  | StepWrite: forall inum off b rx d,
+    proj1_sig off < proj1_sig (FLen (d inum)) ->
     step (PS (Write inum off b rx) d)
          (PS (rx tt) (setidx eq_inodenum_dec d inum
                       (File (FFree (d inum))
@@ -153,10 +155,14 @@ Inductive statematch : InodeRW.State -> FsPartsTop.State -> Prop :=
   | Match: forall f i m b
     (MFree: forall inum, FFree (f inum) = IFree (i inum))
     (MLen: forall inum, FLen (f inum) = ILen (i inum))
-    (MData: forall inum off, FData (f inum) off = b (IBlocks (i inum) off)),
+    (MData: forall inum off,
+     proj1_sig off < proj1_sig (FLen (f inum)) ->
+     FData (f inum) off = b (IBlocks (i inum) off)),
     statematch f (FsPartsTop.PartState i m b).
 Definition StateMatch := statematch.
 Hint Constructors statematch.
+
+Ltac auto_omega' := auto; omega'.
 
 Theorem FSim:
   forall R,
@@ -181,7 +187,26 @@ Proof.
     + crush.
 
   - (* Write *)
-    admit.
+    econstructor; split.
+    + unfold Compile; fold (@Compile R).
+      eapply star_step;
+      [ constructor;
+        constructor; (* invert progreturns *)
+        eapply star_step; [constructor|]; (* inode program *)
+        apply star_refl |].
+      eapply star_step;
+      [ constructor;
+        constructor; (* invert progreturns *)
+        eapply star_step; [constructor|]; (* blocks program *)
+        apply star_refl |].
+      apply star_refl.
+    + constructor; auto.
+      constructor; intros; destruct (eq_inodenum_dec inum inum0); subst;
+      repeat resolve_setidx auto_omega'; crush.
+      * destruct (eq_iblocknum_dec off off0); subst; repeat resolve_setidx auto_omega'; auto.
+        (* XXX need an extra condition: all block addrs in an inode are distinct *)
+      * admit.
+        (* XXX need an extra condition: block addrs between inodes are distinct *)
 
   - (* Alloc OK *)
     admit.
