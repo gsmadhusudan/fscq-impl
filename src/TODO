@@ -29,3 +29,7 @@ How to cleanly represent crash properties for a refinement between two
   SmallStepLang's?  Maybe have an AtomicRefines refinement?  And perhaps
   a StatefulSSL (SmallStepLang) that captures persistent vs ephemeral state?
 
+How to keep state in a layer?  Currently, the Compile function completely
+  maps a high-level program into low-level operations, without access to
+  its own state...
+
