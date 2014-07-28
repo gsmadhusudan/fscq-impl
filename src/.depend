@@ -1,8 +1,20 @@
 CpdtTactics.vo CpdtTactics.glob CpdtTactics.v.beautified: CpdtTactics.v
 FsTactics.vo FsTactics.glob FsTactics.v.beautified: FsTactics.v
-Storage.vo Storage.glob Storage.v.beautified: Storage.v FsTactics.vo
-Closures.vo Closures.glob Closures.v.beautified: Closures.v
-Bank.vo Bank.glob Bank.v.beautified: Bank.v Storage.vo CpdtTactics.vo
-Trans.vo Trans.glob Trans.v.beautified: Trans.v CpdtTactics.vo FsTactics.vo Storage.vo Bank.vo Closures.v
-Monad.vo Monad.glob Monad.v.beautified: Monad.v
-Fs4.vo Fs4.glob Fs4.v.beautified: Fs4.v CpdtTactics.vo Monad.vo
+Util.vo Util.glob Util.v.beautified: Util.v CpdtTactics.vo
+Closures.vo Closures.glob Closures.v.beautified: Closures.v CpdtTactics.vo
+Smallstep.vo Smallstep.glob Smallstep.v.beautified: Smallstep.v CpdtTactics.vo Closures.vo
+LoopfreeWF.vo LoopfreeWF.glob LoopfreeWF.v.beautified: LoopfreeWF.v CpdtTactics.vo Closures.vo
+DiskMod.vo DiskMod.glob DiskMod.v.beautified: DiskMod.v CpdtTactics.vo FsTactics.vo Closures.vo Util.vo Smallstep.vo
+FsPartsMod.vo FsPartsMod.glob FsPartsMod.v.beautified: FsPartsMod.v CpdtTactics.vo FsTactics.vo DiskMod.vo Util.vo Smallstep.vo Closures.vo
+FsLayout.vo FsLayout.glob FsLayout.v.beautified: FsLayout.v CpdtTactics.vo FsTactics.vo DiskMod.vo Util.vo Smallstep.vo Closures.vo FsPartsMod.vo
+LogPartsMod.vo LogPartsMod.glob LogPartsMod.v.beautified: LogPartsMod.v CpdtTactics.vo FsTactics.vo DiskMod.vo Util.vo Smallstep.vo Closures.vo
+LogLayout.vo LogLayout.glob LogLayout.v.beautified: LogLayout.v CpdtTactics.vo FsTactics.vo DiskMod.vo Util.vo Smallstep.vo Closures.vo LogPartsMod.vo FsLayout.vo
+InodeLayout.vo InodeLayout.glob InodeLayout.v.beautified: InodeLayout.v CpdtTactics.vo FsTactics.vo DiskMod.vo Util.vo Smallstep.vo Closures.vo FsLayout.vo
+InodeAllocMod.vo InodeAllocMod.glob InodeAllocMod.v.beautified: InodeAllocMod.v CpdtTactics.vo FsTactics.vo Util.vo Smallstep.vo Closures.vo FsLayout.vo InodeLayout.vo
+BmapLayout.vo BmapLayout.glob BmapLayout.v.beautified: BmapLayout.v CpdtTactics.vo FsTactics.vo DiskMod.vo Util.vo Smallstep.vo Closures.vo FsLayout.vo
+BmapAllocOneMod.vo BmapAllocOneMod.glob BmapAllocOneMod.v.beautified: BmapAllocOneMod.v CpdtTactics.vo FsTactics.vo Util.vo Smallstep.vo Closures.vo FsLayout.vo BmapLayout.vo
+BmapAllocPairMod.vo BmapAllocPairMod.glob BmapAllocPairMod.v.beautified: BmapAllocPairMod.v CpdtTactics.vo FsTactics.vo Util.vo Smallstep.vo Closures.vo FsLayout.vo BmapLayout.vo BmapAllocOneMod.vo
+BmapAllocMod.vo BmapAllocMod.glob BmapAllocMod.v.beautified: BmapAllocMod.v CpdtTactics.vo FsTactics.vo Util.vo Smallstep.vo Closures.vo FsLayout.vo BmapLayout.vo BmapAllocOneMod.vo BmapAllocPairMod.vo
+InodeRWMod.vo InodeRWMod.glob InodeRWMod.v.beautified: InodeRWMod.v CpdtTactics.vo FsTactics.vo Util.vo Smallstep.vo Closures.vo InodeAllocMod.vo BmapAllocMod.vo DiskMod.vo FsPartsMod.vo FsLayout.vo InodeLayout.vo
+DirApp.vo DirApp.glob DirApp.v.beautified: DirApp.v CpdtTactics.vo FsTactics.vo ./FileSpec.vo Util.vo Closures.vo FsLayout.vo
+EndToEnd.vo EndToEnd.glob EndToEnd.v.beautified: EndToEnd.v Util.vo Smallstep.vo DiskMod.vo FsLayout.vo FsPartsMod.vo BmapLayout.vo BmapAllocOneMod.vo BmapAllocPairMod.vo BmapAllocMod.vo InodeLayout.vo InodeAllocMod.vo InodeRWMod.vo

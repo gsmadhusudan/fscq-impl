@@ -26,6 +26,7 @@ FILES = CpdtTactics.v \
 	BmapAllocPairMod.v \
 	BmapAllocMod.v \
 	InodeRWMod.v \
+        DirApp.v \
 	EndToEnd.v
 
 PROOFFILES = 
