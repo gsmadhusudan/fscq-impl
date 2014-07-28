@@ -25,3 +25,7 @@ It's annoying having to implement cases that are undefined behavior in semantics
   E.g., InodeRW.Shrink requires len to be a particular value, but the Compile
   function cannot reason about this, and has to handle any len..
 
+How to cleanly represent crash properties for a refinement between two
+  SmallStepLang's?  Maybe have an AtomicRefines refinement?  And perhaps
+  a StatefulSSL (SmallStepLang) that captures persistent vs ephemeral state?
+
