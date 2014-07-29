@@ -55,6 +55,9 @@ Module MyDisk := Disk.
 Module MyDiskCache := Disk.
 
 Module ExecDisk <: Executable Disk.
+(* This is just a Coq sketch; actual implementation of (Executable Disk)
+ * would likely come from native code like Ocaml.
+ *)
 Definition MemState := MyDisk.addr->MyDisk.block.
 Definition MemInit := fun (x: MyDisk.addr) => 0.
 Fixpoint Execute {R:Type} (s:MemState) (p:MyDisk.Prog R) : MemState * R :=
