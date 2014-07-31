@@ -31,7 +31,7 @@ FILES = CpdtTactics.v \
 
 PROOFFILES = 
 
-all:	tests/fs.native
+all:	tests/fs.native tests/dirappml.native
 
 tests/%.native: tests/%.ml codegen/extraction.vo
 	rm -f $@

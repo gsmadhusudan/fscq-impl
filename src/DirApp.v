@@ -19,17 +19,10 @@ Require Import Program.Utils.
 Definition filename := nat. (* for now, a file name is really a number. *)
 
 Inductive daproc :=
+| DAAlloc (rx: inodenum -> daproc)
 | DASet (di: inodenum) (name: filename) (inumber: inodenum) (rx: daproc)
-| DAGet (di: inodenum) (name: filename) (rx: inodenum -> daproc).
-
-(* XXX what is R? *)
-(* XXX what is Return? *)
-(* XXX what is Program? *)
-(* XXX if off is iblocknum, can't guess decreasing argument *)
-(* XXX if off is nat, do_set think do_set_iter is undefined *)
-(* Program, off:ilength, { measure off } *)
-(* passing (len+1) to grow causes do_set_iter to be undefined *)
-(*   maybe len+1 is no longer clearly an ilength (i.e. <=NBlockPerInode) *)
+| DAGet (di: inodenum) (name: filename) (rx: inodenum -> daproc)
+| DAReturn (v : nat).
 
 Program Definition append_entry (di : inodenum)
    (name : filename) (inumber : nat)
@@ -117,15 +110,21 @@ Program Definition do_get (di: inodenum) (name: filename)
   lll <- InodeRW.GetLen di ;
   do_get_iter di name lll lll rx.
 
-Program Definition do_init rx : InodeRW.Prog nat :=
+Program Definition do_alloc (rx : inodenum -> InodeRW.Prog nat)
+                           : InodeRW.Prog nat :=
   InodeRW.Alloc (fun o =>
     match o with
     | None => rx 0 (* XXX error *)
     | Some di => rx di
     end ).
 
+Obligation 1.
+Admitted.
+
 Program Fixpoint compile_da (p: daproc) : InodeRW.Prog nat :=
 match p with
+| DAAlloc rx => do_alloc (fun v => compile_da (rx v))
 | DASet di name inumber rx => do_set di name inumber (compile_da rx)
 | DAGet di name rx => do_get di name (fun v => compile_da (rx v))
+| DAReturn v => InodeRW.Return v
 end.
