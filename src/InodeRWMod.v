@@ -43,6 +43,7 @@ Inductive prog {R:Type} : Type :=
   | Free (inum:inodenum) (rx:unit->prog)
   | Shrink (inum:inodenum) (len:ilength) (rx:unit->prog)
   | Grow (inum:inodenum) (len:ilength) (rx:bool->prog)
+  | GetLen (inum:inodenum) (rx:ilength->prog)
   | Return (v:R).
 Definition Prog := @prog.
 Definition ReturnOp := @Return.
@@ -148,6 +149,10 @@ Program Fixpoint Compile {R:Type} (p:InodeRW.Prog R) : (FsPartsTop.Prog R) :=
                     BlocksPartDisk.Return tt);;
       Compile (rx true)
     end
+  | InodeRW.GetLen inum rx =>
+    len <- FsPartsTop.I (v <- InodeAlloc.Read inum;
+                         InodeAlloc.Return (ILen v)) ;
+    Compile (rx len)
   | InodeRW.Return v => FsPartsTop.Return v
   end.
 

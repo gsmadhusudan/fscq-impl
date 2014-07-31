@@ -16,5 +16,5 @@ BmapAllocOneMod.vo BmapAllocOneMod.glob BmapAllocOneMod.v.beautified: BmapAllocO
 BmapAllocPairMod.vo BmapAllocPairMod.glob BmapAllocPairMod.v.beautified: BmapAllocPairMod.v CpdtTactics.vo FsTactics.vo Util.vo Smallstep.vo Closures.vo FsLayout.vo BmapLayout.vo BmapAllocOneMod.vo
 BmapAllocMod.vo BmapAllocMod.glob BmapAllocMod.v.beautified: BmapAllocMod.v CpdtTactics.vo FsTactics.vo Util.vo Smallstep.vo Closures.vo FsLayout.vo BmapLayout.vo BmapAllocOneMod.vo BmapAllocPairMod.vo
 InodeRWMod.vo InodeRWMod.glob InodeRWMod.v.beautified: InodeRWMod.v CpdtTactics.vo FsTactics.vo Util.vo Smallstep.vo Closures.vo InodeAllocMod.vo BmapAllocMod.vo DiskMod.vo FsPartsMod.vo FsLayout.vo InodeLayout.vo
-DirApp.vo DirApp.glob DirApp.v.beautified: DirApp.v CpdtTactics.vo FsTactics.vo ./FileSpec.vo Util.vo Closures.vo FsLayout.vo
+DirApp.vo DirApp.glob DirApp.v.beautified: DirApp.v CpdtTactics.vo FsTactics.vo InodeRWMod.vo Util.vo Closures.vo FsLayout.vo
 EndToEnd.vo EndToEnd.glob EndToEnd.v.beautified: EndToEnd.v Util.vo Smallstep.vo DiskMod.vo FsLayout.vo FsPartsMod.vo BmapLayout.vo BmapAllocOneMod.vo BmapAllocPairMod.vo BmapAllocMod.vo InodeLayout.vo InodeAllocMod.vo InodeRWMod.vo

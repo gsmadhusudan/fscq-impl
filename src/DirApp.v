@@ -4,79 +4,128 @@ Require Import NPeano.
 Import ListNotations.
 Require Import CpdtTactics.
 Require Import FsTactics.
-Require Import FileSpec.
 Require Import Util.
+Require Import InodeRWMod.
 Require Import Closures.
 Require Import FsLayout.
+Require Import InodeLayout.
+Require Import Program.Utils.
 
 (*
  * DirApp keeps, in a file, a mapping from file name to i-number.
  * It's a toy directory.
  *)
 
-Open Scope fscq_scope.
-
 Definition filename := nat. (* for now, a file name is really a number. *)
 
 Inductive daproc :=
-| DAHalt
 | DASet (di: inodenum) (name: filename) (inumber: inodenum) (rx: daproc)
 | DAGet (di: inodenum) (name: filename) (rx: inodenum -> daproc).
 
-Fixpoint do_set_iter (di: inodenum) (off: blockoffset) (len: blockoffset)
-                     (name: filename) (inumber: inodenum)
-                     (rx: fprog) : fprog :=
+(* XXX what is R? *)
+(* XXX what is Return? *)
+(* XXX what is Program? *)
+(* XXX if off is iblocknum, can't guess decreasing argument *)
+(* XXX if off is nat, do_set think do_set_iter is undefined *)
+(* Program, off:ilength, { measure off } *)
+(* passing (len+1) to grow causes do_set_iter to be undefined *)
+(*   maybe len+1 is no longer clearly an ilength (i.e. <=NBlockPerInode) *)
+
+Program Definition append_entry (di : inodenum)
+   (name : filename) (inumber : nat)
+   (len : ilength)
+   (rx: InodeRW.Prog nat) : (InodeRW.Prog nat) :=
+if dec (leb (len + 2) NBlockPerInode) then
+  ok1 <- InodeRW.Grow di (len + 1) ; 
+  ok2 <- InodeRW.Grow di (len + 2)  ; 
+  ok3 <- InodeRW.Write di len name ;
+  ok4 <- InodeRW.Write di (len + 1) inumber ;
+  rx
+else
+  rx. (* XXX error *)
+
+Obligation 1.
+Admitted.
+Obligation 2.
+Admitted.
+Obligation 3.
+Admitted.
+Obligation 4.
+Admitted.
+
+Program Fixpoint do_set_iter (di : inodenum)
+   (name : filename) (inumber : nat)
+   (len : ilength) (off : ilength) 
+   (rx: InodeRW.Prog nat) { measure off } : (InodeRW.Prog nat) :=
 match off with
-| O => FCommon (FTrunc di (len + 2))
-        (fun _ => FCommon (FWrite di len name) 
-          (fun _ => FCommon (FWrite di (len + 1) inumber) 
-            (fun _ => rx)))
-| S (S n) =>
-      nx <- FCommon (FRead di (off - 2)) ;
+| O => append_entry di name inumber len rx
+| S (S n) => 
+      nx <- InodeRW.Read di (off - 2) ;
       if eq_nat_dec nx name then
-        FCommon (FWrite di (off - 1) inumber) (fun _ => rx)
+        InodeRW.Write di (off - 1) inumber (fun _ => rx)
       else
-        do_set_iter di n len name inumber rx
-| S n => rx
+        do_set_iter di name inumber len n rx
+| (S n) => rx
 end.
 
-Program Definition do_set (di: inodenum) (name: filename) (inumber: inodenum)
-                          (rx: fprog) : fprog :=
-  lll <- FCommon (FGetLen di) ;
-  do_set_iter di lll lll name inumber rx.
+Obligation 1.
+Admitted.
+Obligation 2.
+Admitted.
+Obligation 3.
+Admitted.
 
-Fixpoint do_get_iter (di: inodenum) (off: blockoffset) (len: blockoffset)
-                     (name: filename) (rx: inodenum -> fprog) : fprog :=
+Program Definition do_set (di: inodenum) (name: filename) (inumber: inodenum)
+                          (rx: InodeRW.Prog nat) : (InodeRW.Prog nat) :=
+  lll <- InodeRW.GetLen di ;
+  do_set_iter di name inumber lll lll rx.
+
+Program Fixpoint do_get_iter (di: inodenum)
+                     (name: filename)
+                     (len: ilength) (off: ilength)
+                     (rx: inodenum -> InodeRW.Prog nat)
+                     { measure off }
+                     : InodeRW.Prog nat :=
 match off with
 | O => rx 0
 | S (S n) =>
-      nx <- FCommon (FRead di (off - 2)) ;
-      ix <- FCommon (FRead di (off - 1)) ;
+      nx <- InodeRW.Read di (off - 2) ;
+      ix <- InodeRW.Read di (off - 1) ;
       if eq_nat_dec nx name then
         rx ix
       else
-        do_get_iter di n len name rx
+        do_get_iter di name len n rx
 | S n => rx 0
 end.
 
-Program Definition do_get (di: inodenum) (name: filename)
-                          (rx: inodenum -> fprog) : fprog :=
-  lll <- FCommon (FGetLen di) ;
-  do_get_iter di lll lll name rx.
+Obligation 1.
+Admitted.
+Obligation 2.
+Admitted.
+Obligation 3.
+Admitted.
+Obligation 4.
+Admitted.
+Obligation 5.
+Admitted.
+Obligation 7.
+Admitted.
 
-Definition do_init rx : fprog :=
-  FCommon FAlloc (fun o =>
+Program Definition do_get (di: inodenum) (name: filename)
+                          (rx: inodenum -> InodeRW.Prog nat)
+                          : InodeRW.Prog nat :=
+  lll <- InodeRW.GetLen di ;
+  do_get_iter di name lll lll rx.
+
+Program Definition do_init rx : InodeRW.Prog nat :=
+  InodeRW.Alloc (fun o =>
     match o with
-    | None => FHalt
+    | None => rx 0 (* XXX error *)
     | Some di => rx di
     end ).
 
-(* 
- * compile a DirApp script to a FileSpec script.
- *)
-Fixpoint compile_da (p: daproc) : fprog :=
+Program Fixpoint compile_da (p: daproc) : InodeRW.Prog nat :=
 match p with
-| DAHalt => FHalt
 | DASet di name inumber rx => do_set di name inumber (compile_da rx)
 | DAGet di name rx => do_get di name (fun v => compile_da (rx v))
 end.
