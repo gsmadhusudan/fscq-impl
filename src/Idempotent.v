@@ -57,8 +57,8 @@ Proof.
 Qed.
 
 Theorem corr_to_pp : forall p1 p2 pre1 pre2,
-  {{ pre1 }} p1 >> p2 ->
-  (pre1 ==> [ {{ pre2 }} p2 >> p2 ]) ->
+  {{ pre1 }} p1 >> Check pre2 ;; p2 ->
+  (pre1 ==> [ {{ pre2 }} p2 >> Check pre2 ;; p2 ]) ->
   (pre1 ==> [ pre2 ==> pre1 ]) ->
   preserves_precondition pre1 p1.
 Proof.
@@ -71,11 +71,13 @@ Proof.
     eauto.
     eauto.
   - split; try discriminate.
+(*
     assert (exec m p1 m' Crashed) by ( eapply prog_can_crash; eauto ).
+*)
     admit.
 
   - split; try discriminate.
-    assert ({{ pre2 }} p2 >> p2) by firstorder.
+    assert ({{ pre2 }} p2 >> Check pre2 ;; p2) by firstorder.
     unfold corr in H4.
 
     destruct (exec_recover_can_terminate p2 p2 m').

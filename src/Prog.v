@@ -31,8 +31,10 @@ Definition wringaddr := wring addrlen.
 Add Ring wringaddr : wringaddr (decidable (weqb_sound addrlen), constants [wcst]).
 
 Parameter donetoken : Set.
+Definition mem := addr -> option valu.
 
 Inductive prog :=
+| Check (p: mem -> Prop) (rx: unit -> prog)
 | Done (t: donetoken)
 | Read (a: addr) (rx: valu -> prog)
 | Write (a: addr) (v: valu) (rx: unit -> prog).
@@ -43,7 +45,6 @@ Notation "p1 ;; p2" := (progseq p1 (fun _: unit => p2)) (at level 60, right asso
 Notation "x <- p1 ; p2" := (progseq p1 (fun x => p2)) (at level 60, right associativity).
 
 
-Definition mem := addr -> option valu.
 Definition upd (m : mem) (a : addr) (v : valu) : mem :=
   fun a' => if addr_eq_dec a' a then Some v else m a'.
 
@@ -54,6 +55,10 @@ Inductive outcome :=
 
 Inductive exec : mem -> prog -> mem -> outcome -> Prop :=
 | XDone : forall m t, exec m (Done t) m Finished
+| XCheckOK : forall m m' (p : mem -> Prop) rx out,
+  p m ->
+  exec m (rx tt) m' out ->
+  exec m (Check p rx) m' out
 | XReadFail : forall m a rx,
   m a = None ->
   exec m (Read a rx) m Failed
