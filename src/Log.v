@@ -1083,6 +1083,9 @@ Module LOG.
     step.
     step.
     step.
+    step.
+    step.
+    step.
 
     eapply pimpl_ok. eauto with prog. norm'l.
     exfalso; eapply natToWord_discriminate; [|eauto]; rewrite valulen_is; omega.
@@ -1093,12 +1096,21 @@ Module LOG.
     step.
     step.
     step.
+    step.
+    step.
+    step.
+    step.
     log_unfold; cancel.
 
     step.
     log_unfold; cancel.
+    step.
+    log_unfold; cancel.
+    log_unfold; cancel.
+    step.
     log_unfold; cancel.
 
+    step.
     step.
     step.
   Qed.

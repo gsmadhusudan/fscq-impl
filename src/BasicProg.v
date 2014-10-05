@@ -84,19 +84,22 @@ Hint Extern 1 ({{_}} progseq (Write _ _) _ >> _) => apply write_ok : prog.
 
 Theorem check_ok:
   forall (p:pred) (rx:unit->prog) (rec:prog),
-  {{ p
-   * [[{{ p }} (rx tt) >> rec]]
+  {{ exists p', p'
+   * [[ p' ==> p ]]
+   * [[{{ p' }} (rx tt) >> rec]]
   }} Check p rx >> rec.
 Proof.
   unfold corr; intros.
+  destruct H.
   apply sep_star_lift2and in H. unfold lift in H. destruct H.
-  inversion H0; try congruence; subst.
-  - inversion H2; subst.
+  apply sep_star_lift2and in H. unfold lift in H. destruct H.
+  inv_exec_recover; try congruence; subst.
+  - inv_exec; subst.
     + exfalso; auto.
     + exfalso; unfold not in *; eapply H1 with (out:=RFailed); eauto.
   - eapply H1; eauto.
     apply XRCrashed with (m':=m'); eauto.
-    inversion H2; eauto.
+    inv_exec; eauto.
 Qed.
 
 Hint Extern 1 ({{_}} progseq (Check _) _ >> _) => apply check_ok : prog.
