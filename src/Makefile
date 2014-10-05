@@ -2,7 +2,7 @@ OCAMLBUILD := ocamlbuild -lib str
 OCAMLINC   := -I codegen
 MODULES    := Nomega Word \
 	      Prog Pred Hoare SepAuto BasicProg Array \
-	      Log Balloc \
+	      Idempotent Log Balloc \
 	      Testprog \
 	      ExtrHaskellPrelude Extraction
 	      # MemLog TxnWrap Scratch

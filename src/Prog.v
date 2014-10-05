@@ -84,7 +84,9 @@ Inductive exec : mem -> prog -> exec_outcome -> Prop :=
   m a = Some v0 ->
   exec (upd m a v) (rx tt) out ->
   exec m (Write a v rx) out
-| XCrash : forall m p, exec m p (Stopped m Crashed).
+| XCrashDone : forall m t, exec m (Done t) (Stopped m Crashed)
+| XCrashRead : forall m a rx, exec m (Read a rx) (Stopped m Crashed)
+| XCrashWrite : forall m a v rx, exec m (Write a v rx) (Stopped m Crashed).
 
 Inductive exec_recover : mem -> prog -> prog -> xr_outcome -> Prop :=
 | XRFail : forall m p1 p2,

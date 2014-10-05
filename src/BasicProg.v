@@ -50,10 +50,10 @@ Proof.
   - apply ptsto_valid in H. congruence.
   - eapply H2. eauto.
     apply ptsto_valid in H. repeat inv_option.
-    eauto.
+    eauto. eauto.
   - eapply H2. eauto.
     apply ptsto_valid in H. repeat inv_option.
-    eauto.
+    eauto. eauto.
   - eapply H1; eauto.
 Qed.
 
@@ -73,14 +73,33 @@ Proof.
   - apply ptsto_valid in H. congruence.
   - eapply H2. instantiate (1:=upd m a v).
     eapply ptsto_upd; eauto.
-    eauto.
+    eauto. eauto.
   - eapply H2. instantiate (1:=upd m a v).
     eapply ptsto_upd; eauto.
-    eauto.
+    eauto. eauto.
   - eapply H1; unfold or; eauto.
 Qed.
 
 Hint Extern 1 ({{_}} progseq (Write _ _) _ >> _) => apply write_ok : prog.
+
+Theorem check_ok:
+  forall (p:pred) (rx:unit->prog) (rec:prog),
+  {{ p
+   * [[{{ p }} (rx tt) >> rec]]
+  }} Check p rx >> rec.
+Proof.
+  unfold corr; intros.
+  apply sep_star_lift2and in H. unfold lift in H. destruct H.
+  inversion H0; try congruence; subst.
+  - inversion H2; subst.
+    + exfalso; auto.
+    + exfalso; unfold not in *; eapply H1 with (out:=RFailed); eauto.
+  - eapply H1; eauto.
+    apply XRCrashed with (m':=m'); eauto.
+    inversion H2; eauto.
+Qed.
+
+Hint Extern 1 ({{_}} progseq (Check _) _ >> _) => apply check_ok : prog.
 
 Definition If_ P Q (b : {P} + {Q}) (p1 p2 : prog) :=
   if b then p1 else p2.

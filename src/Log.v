@@ -1051,21 +1051,26 @@ Module LOG.
       rx tt
     }.
 
+  Definition intact xp : pred :=
+    ((exists m F, rep xp (NoTransaction m) * F) \/
+     (exists m m' F, rep xp (ActiveTxn m m') * F) \/
+     (exists m F, rep xp (CommittedTxn m) * F))%pred.
+
   Theorem recover_ok : forall xp rx rec,
     {{ (exists m F, rep xp (NoTransaction m) * F
-        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> rec ]]
-        * [[ {{ rep xp (NoTransaction m) * F }} rec >> rec ]])
+        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; rec ]]
+        * [[ {{ rep xp (NoTransaction m) * F }} rec >> Check (intact xp) ;; rec ]])
     \/ (exists m m' F, rep xp (ActiveTxn m m') * F
-        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> rec ]]
+        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; rec ]]
         * [[ {{ rep xp (ActiveTxn m m') * F
-             \/ rep xp (NoTransaction m) * F }} rec >> rec ]])
+             \/ rep xp (NoTransaction m) * F }} rec >> Check (intact xp) ;; rec ]])
     \/ (exists m F, rep xp (CommittedTxn m) * F
-        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> rec ]]
+        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; rec ]]
         * [[ {{ rep xp (CommittedTxn m) * F
-             \/ rep xp (NoTransaction m) * F }} rec >> rec ]])
-    }} recover xp rx >> rec.
+             \/ rep xp (NoTransaction m) * F }} rec >> Check (intact xp) ;; rec ]])
+    }} recover xp rx >> Check (intact xp) ;; rec.
   Proof.
-    unfold recover; log_unfold.
+    unfold recover; unfold intact; log_unfold.
     step.
 
     step.

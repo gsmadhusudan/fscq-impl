@@ -71,7 +71,6 @@ Proof.
       inversion H4; subst.
       * exfalso. edestruct H2; eauto.
       * eapply H0; eauto.
-      * exfalso. edestruct H5; eauto.
 Qed.
 
 
@@ -110,7 +109,3 @@ Proof.
   apply idempotent_ok.
   apply recover_preserves.
 Qed.
-
-(* XXX might need to change exec's definition to prohibit crashing
- * on a Check op..
- *)
