@@ -5,7 +5,7 @@ Require Import Pred.
 Definition preserves_precondition (pre : pred) p :=
   forall m out, pre m -> exec m p out -> exists m' s, out = (Stopped m' s) /\ pre m'.
 
-Theorem pp_lift : forall pre P p,
+Theorem pp_add_lift : forall pre P p,
   preserves_precondition pre p ->
   preserves_precondition (pre * [[ P ]]) p.
 Proof.
@@ -16,6 +16,19 @@ Proof.
   do 2 eexists; intuition eauto.
   apply sep_star_and2lift.
   split; eauto.
+Qed.
+
+Theorem pp_drop_lift : forall pre (P : Prop) p,
+  P ->
+  preserves_precondition (pre * [[ P ]]) p ->
+  preserves_precondition pre p.
+Proof.
+  unfold preserves_precondition; intros.
+  edestruct H0; clear H0; eauto.
+  apply sep_star_and2lift. split; eauto.
+  deex.
+  apply sep_star_lift2and in H4; destruct H4.
+  eauto.
 Qed.
 
 Theorem idempotent_ok' : forall p p1 p2 pre,
@@ -71,7 +84,6 @@ Proof.
       inversion H4; subst.
       * exfalso. edestruct H2; eauto.
       * eapply H0; eauto.
-      * exfalso. edestruct H5; eauto.
 Qed.
 
 
@@ -81,58 +93,16 @@ Parameter xrecover : prog -> prog.
 Parameter log_intact : pred.
 Parameter recovered : pred.
 
-
-Section DONETOKEN_EXISTS.
-
-Variable p: prog.
-Variable rec: prog.
-Variable pre: pred.
-Variable pok: {{ pre }} p >> rec.
-Variable m: mem.
-Variable mok: pre m.
-
-Definition exec_t_ex: forall m p out m',
-  exec m p out ->
-  out = (Stopped m' Finished) ->
-  exists t: donetoken, True.
-Proof.
-  intros.
-  induction H; try discriminate; eauto.
-Qed.
-
-Definition execr_t_ex: forall m p1 p2 out,
-  exec_recover m p1 p2 out ->
-  out <> RFailed ->
-  exists t: donetoken, True.
-Proof.
-  intros.
-  induction H.
-  - exfalso. auto.
-  - eapply exec_t_ex; eauto.
-  - eauto.
-Qed.
-
-Definition t_ex: exists t: donetoken, True.
-  destruct (exec_recover_can_terminate p rec m).
-  apply execr_t_ex with (m:=m) (p1:=p) (p2:=rec) (out:=x); auto.
-  eapply pok; eauto.
-Qed.
-
-End DONETOKEN_EXISTS.
-
-
-Theorem recover_base_ok : forall rx rec,
+Theorem recover_base_ok : forall rx,
   {{ log_intact
-   * [[ exists p, {{ recovered }} rx >> Check log_intact ;; p ]]
-   * [[ exists p, {{ log_intact }} rec >> Check log_intact ;; p ]]
-  }} xrecover rx >> Check log_intact ;; rec.
+   * [[ {{ recovered }} rx >> Check log_intact ;; Done tt ]]
+  }} xrecover rx >> Check log_intact ;; Done tt.
 Admitted.
 
-Theorem recover_preserves : forall rx rec,
+Theorem recover_preserves : forall rx,
   preserves_precondition
     (log_intact
-   * [[ exists p, {{ recovered }} rx >> Check log_intact ;; p ]]
-   * [[ exists p, {{ log_intact }} rec >> Check log_intact ;; p ]])
+   * [[ {{ recovered }} rx >> Check log_intact ;; Done tt ]])
     (xrecover rx).
 Proof.
   intros.
@@ -143,10 +113,10 @@ Proof.
   repeat ( apply sep_star_and2lift; unfold lift; split; eauto ).
 Qed.
 
-Theorem recover_idempotent_ok : forall rec,
+Theorem recover_idempotent_ok : forall rx,
   {{ log_intact
-   * [[ {{ recovered }} rec >> Check log_intact ;; rec ]]
-  }} xrecover rec >> xrecover rec.
+   * [[ {{ recovered }} rx >> Check log_intact ;; Done tt ]]
+  }} xrecover rx >> xrecover rx.
 Proof.
   intros.
   apply idempotent_ok.
