@@ -71,43 +71,84 @@ Proof.
       inversion H4; subst.
       * exfalso. edestruct H2; eauto.
       * eapply H0; eauto.
+      * exfalso. edestruct H5; eauto.
 Qed.
 
 
 (* Sketch of how we might prove recover's idempotence *)
 
-(*
-Parameter recover : prog -> prog.
+Parameter xrecover : prog -> prog.
 Parameter log_intact : pred.
 Parameter recovered : pred.
 
+
+Section DONETOKEN_EXISTS.
+
+Variable p: prog.
+Variable rec: prog.
+Variable pre: pred.
+Variable pok: {{ pre }} p >> rec.
+Variable m: mem.
+Variable mok: pre m.
+
+Definition exec_t_ex: forall m p out m',
+  exec m p out ->
+  out = (Stopped m' Finished) ->
+  exists t: donetoken, True.
+Proof.
+  intros.
+  induction H; try discriminate; eauto.
+Qed.
+
+Definition execr_t_ex: forall m p1 p2 out,
+  exec_recover m p1 p2 out ->
+  out <> RFailed ->
+  exists t: donetoken, True.
+Proof.
+  intros.
+  induction H.
+  - exfalso. auto.
+  - eapply exec_t_ex; eauto.
+  - eauto.
+Qed.
+
+Definition t_ex: exists t: donetoken, True.
+  destruct (exec_recover_can_terminate p rec m).
+  apply execr_t_ex with (m:=m) (p1:=p) (p2:=rec) (out:=x); auto.
+  eapply pok; eauto.
+Qed.
+
+End DONETOKEN_EXISTS.
+
+
 Theorem recover_base_ok : forall rx rec,
   {{ log_intact
-   * [[ {{ recovered }} rec >> Check log_intact ;; rec ]]
-  }} recover rx >> Check log_intact ;; rec.
+   * [[ exists p, {{ recovered }} rx >> Check log_intact ;; p ]]
+   * [[ exists p, {{ log_intact }} rec >> Check log_intact ;; p ]]
+  }} xrecover rx >> Check log_intact ;; rec.
 Admitted.
 
 Theorem recover_preserves : forall rx rec,
   preserves_precondition
-    (log_intact * [[ {{ recovered }} rec >> Check log_intact ;; rec ]])
-    (recover rx).
+    (log_intact
+   * [[ exists p, {{ recovered }} rx >> Check log_intact ;; p ]]
+   * [[ exists p, {{ log_intact }} rec >> Check log_intact ;; p ]])
+    (xrecover rx).
 Proof.
   intros.
   eapply corr_to_pp.
   eapply pimpl_ok. apply recover_base_ok. apply pimpl_refl.
-  apply sep_star_lift_l; intros.
+  repeat ( apply sep_star_lift_l; intros ).
   unfold lift, pimpl; intros.
-  apply sep_star_and2lift; unfold lift.
-  split; eauto.
+  repeat ( apply sep_star_and2lift; unfold lift; split; eauto ).
 Qed.
 
 Theorem recover_idempotent_ok : forall rec,
   {{ log_intact
    * [[ {{ recovered }} rec >> Check log_intact ;; rec ]]
-  }} recover rec >> recover rec.
+  }} xrecover rec >> xrecover rec.
 Proof.
   intros.
   apply idempotent_ok.
   apply recover_preserves.
 Qed.
-*)
