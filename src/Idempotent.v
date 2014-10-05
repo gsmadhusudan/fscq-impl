@@ -76,6 +76,7 @@ Qed.
 
 (* Sketch of how we might prove recover's idempotence *)
 
+(*
 Parameter recover : prog -> prog.
 Parameter log_intact : pred.
 Parameter recovered : pred.
@@ -109,3 +110,4 @@ Proof.
   apply idempotent_ok.
   apply recover_preserves.
 Qed.
+*)

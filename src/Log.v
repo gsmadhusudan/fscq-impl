@@ -11,6 +11,7 @@ Require Import Word.
 Require Import Omega.
 Require Import Eqdep_dec.
 Require Import Array.
+Require Import Idempotent.
 
 Set Implicit Arguments.
 
@@ -1116,5 +1117,21 @@ Module LOG.
   Qed.
 
   Hint Extern 1 ({{_}} progseq (recover _) _ >> _) => apply recover_ok : prog.
+
+  Theorem recover_idem_ok : forall xp rx,
+    {{ (exists m F, rep xp (NoTransaction m) * F
+        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; rx tt ]])
+    \/ (exists m m' F, rep xp (ActiveTxn m m') * F
+        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; rx tt ]])
+    \/ (exists m F, rep xp (CommittedTxn m) * F
+        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; rx tt ]])
+    }} recover xp rx >> recover xp rx.
+  Proof.
+    intros.
+    apply idempotent_ok.
+    eapply corr_to_pp.
+    eapply pimpl_ok.
+    apply recover_ok.
+  Abort.
 
 End LOG.
