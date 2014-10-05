@@ -1057,6 +1057,12 @@ Module LOG.
      (exists m m' F, rep xp (ActiveTxn m m') * F) \/
      (exists m F, rep xp (CommittedTxn m) * F))%pred.
 
+  Hint Extern 1 (False) =>
+    match goal with
+    | [ H: $0 = $1 |- _ ] =>
+      eapply natToWord_discriminate; [|eauto]; rewrite valulen_is; omega
+    end : false_precondition_hint.
+
   Theorem recover_ok : forall xp rx rec,
     {{ (exists m F, rep xp (NoTransaction m) * F
         * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; rec ]]
@@ -1072,48 +1078,13 @@ Module LOG.
     }} recover xp rx >> Check (intact xp) ;; rec.
   Proof.
     unfold recover; unfold intact; log_unfold.
-    step.
+    hoare.
 
-    step.
-    eapply pimpl_ok. eauto with prog. norm'l.
-    exfalso; eapply natToWord_discriminate; [|eauto]; rewrite valulen_is; omega.
-
-    step.
-    step.
-
-    step.
-    step.
-    step.
-    step.
-    step.
-    step.
-
-    eapply pimpl_ok. eauto with prog. norm'l.
-    exfalso; eapply natToWord_discriminate; [|eauto]; rewrite valulen_is; omega.
-
-    step.
-    step.
-    step.
-    step.
-    step.
-    step.
-    step.
-    step.
-    step.
-    step.
-    log_unfold; cancel.
-
-    step.
-    log_unfold; cancel.
-    step.
     log_unfold; cancel.
     log_unfold; cancel.
-    step.
     log_unfold; cancel.
-
-    step.
-    step.
-    step.
+    log_unfold; cancel.
+    log_unfold; cancel.
   Qed.
 
   Hint Extern 1 ({{_}} progseq (recover _) _ >> _) => apply recover_ok : prog.
