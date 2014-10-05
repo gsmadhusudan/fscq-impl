@@ -31,12 +31,11 @@ Definition addr_eq_dec := @weq addrlen.
 Definition wringaddr := wring addrlen.
 Add Ring wringaddr : wringaddr (decidable (weqb_sound addrlen), constants [wcst]).
 
-Parameter donetoken : Set.
 Definition mem := addr -> option valu.
 
 Inductive prog :=
 | Check (p: mem -> Prop) (rx: unit -> prog)
-| Done (t: donetoken)
+| Done (T: Set) (v: T)
 | Read (a: addr) (rx: valu -> prog)
 | Write (a: addr) (v: valu) (rx: unit -> prog).
 
@@ -62,7 +61,7 @@ Inductive xr_outcome :=
 | RFinished : mem -> xr_outcome.
 
 Inductive exec : mem -> prog -> exec_outcome -> Prop :=
-| XDone : forall m t, exec m (Done t) (Stopped m Finished)
+| XDone : forall m T v, exec m (@Done T v) (Stopped m Finished)
 | XCheckFail : forall m (p : mem -> Prop) rx,
   ~ p m ->
   exec m (Check p rx) Failed
@@ -84,7 +83,7 @@ Inductive exec : mem -> prog -> exec_outcome -> Prop :=
   m a = Some v0 ->
   exec (upd m a v) (rx tt) out ->
   exec m (Write a v rx) out
-| XCrashDone : forall m t, exec m (Done t) (Stopped m Crashed)
+| XCrashDone : forall m T v, exec m (@Done T v) (Stopped m Crashed)
 | XCrashRead : forall m a rx, exec m (Read a rx) (Stopped m Crashed)
 | XCrashWrite : forall m a v rx, exec m (Write a v rx) (Stopped m Crashed).
 

@@ -104,6 +104,23 @@ Qed.
 
 Hint Extern 1 ({{_}} progseq (Check _) _ >> _) => apply check_ok : prog.
 
+Theorem done_ok:
+  forall T v rec,
+  {{ exists p', p'
+   * [[ {{ p' }} rec >> rec ]]
+  }} @Done T v >> rec.
+Proof.
+  unfold corr; intros.
+  destruct H.
+  apply sep_star_lift2and in H. unfold lift in H. destruct H.
+  inv_exec_recover; try congruence; subst.
+  - inv_exec.
+  - inv_exec.
+    eauto.
+Qed.
+
+Hint Extern 1 ({{_}} Done _ >> _) => apply done_ok : prog.
+
 Definition If_ P Q (b : {P} + {Q}) (p1 p2 : prog) :=
   if b then p1 else p2.
 
