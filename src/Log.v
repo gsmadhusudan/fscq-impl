@@ -1030,14 +1030,7 @@ Module LOG.
           \/ rep xp (CommittedTxn m2) * F }} rec >> rec ]]
     }} commit xp rx >> rec.
   Proof.
-    unfold commit; log_unfold.
-    step.
-    step.
-    log_unfold; cancel.
-    step.
-    log_unfold; cancel.
-    log_unfold; cancel.
-    step.
+    unfold commit; hoare_unfold log_unfold.
   Qed.
 
   Hint Extern 1 ({{_}} progseq (commit _) _ >> _) => apply commit_ok : prog.
@@ -1077,14 +1070,7 @@ Module LOG.
              \/ rep xp (NoTransaction m) * F }} rec >> Check (intact xp) ;; rec ]])
     }} recover xp rx >> Check (intact xp) ;; rec.
   Proof.
-    unfold recover; unfold intact; log_unfold.
-    hoare.
-
-    log_unfold; cancel.
-    log_unfold; cancel.
-    log_unfold; cancel.
-    log_unfold; cancel.
-    log_unfold; cancel.
+    unfold recover, intact; hoare_unfold log_unfold.
   Qed.
 
   Hint Extern 1 ({{_}} progseq (recover _) _ >> _) => apply recover_ok : prog.
