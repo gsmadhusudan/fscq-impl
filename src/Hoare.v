@@ -7,10 +7,10 @@ Set Implicit Arguments.
 (** ** Hoare triples *)
 
 Definition corr (pre: pred) (prog1 prog2: prog) :=
-  forall m m' out,
+  forall m out,
   pre m ->
-  exec_recover m prog1 prog2 m' out ->
-  out = Finished.
+  exec_recover m prog1 prog2 out ->
+  out <> RFailed.
 
 Notation "{{ pre }} p1 >> p2" := (corr pre%pred p1 p2)
   (at level 0, p1 at level 60, p2 at level 60).

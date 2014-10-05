@@ -1,6 +1,7 @@
 Require Import Arith.
 Require Import Word.
 Require Import FunctionalExtensionality.
+Require Import Classical_Prop.
 
 Set Implicit Arguments.
 
@@ -48,90 +49,111 @@ Notation "x <- p1 ; p2" := (progseq p1 (fun x => p2)) (at level 60, right associ
 Definition upd (m : mem) (a : addr) (v : valu) : mem :=
   fun a' => if addr_eq_dec a' a then Some v else m a'.
 
-Inductive outcome :=
-| Failed
-| Finished
-| Crashed.
+Inductive crash_status :=
+| Crashed
+| Finished.
 
-Inductive exec : mem -> prog -> mem -> outcome -> Prop :=
-| XDone : forall m t, exec m (Done t) m Finished
-| XCheckOK : forall m m' (p : mem -> Prop) rx out,
+Inductive exec_outcome :=
+| Failed : exec_outcome
+| Stopped : mem -> crash_status -> exec_outcome.
+
+Inductive xr_outcome :=
+| RFailed : xr_outcome
+| RFinished : mem -> xr_outcome.
+
+Inductive exec : mem -> prog -> exec_outcome -> Prop :=
+| XDone : forall m t, exec m (Done t) (Stopped m Finished)
+| XCheckFail : forall m (p : mem -> Prop) rx,
+  ~ p m ->
+  exec m (Check p rx) Failed
+| XCheckOK : forall m (p : mem -> Prop) rx out,
   p m ->
-  exec m (rx tt) m' out ->
-  exec m (Check p rx) m' out
+  exec m (rx tt) out ->
+  exec m (Check p rx) out
 | XReadFail : forall m a rx,
   m a = None ->
-  exec m (Read a rx) m Failed
+  exec m (Read a rx) Failed
 | XWriteFail : forall m a v rx,
   m a = None ->
-  exec m (Write a v rx) m Failed
-| XReadOK : forall m a v rx m' out,
+  exec m (Write a v rx) Failed
+| XReadOK : forall m a v rx out,
   m a = Some v ->
-  exec m (rx v) m' out ->
-  exec m (Read a rx) m' out
-| XWriteOK : forall m a v v0 rx m' out,
+  exec m (rx v) out ->
+  exec m (Read a rx) out
+| XWriteOK : forall m a v v0 rx out,
   m a = Some v0 ->
-  exec (upd m a v) (rx tt) m' out ->
-  exec m (Write a v rx) m' out
-| XCrash : forall m p, exec m p m Crashed.
+  exec (upd m a v) (rx tt) out ->
+  exec m (Write a v rx) out
+| XCrash : forall m p, exec m p (Stopped m Crashed).
 
-Inductive exec_recover : mem -> prog -> prog -> mem -> outcome -> Prop :=
-| XRFail : forall m p1 p2 m',
-  exec m p1 m' Failed -> exec_recover m p1 p2 m' Failed
+Inductive exec_recover : mem -> prog -> prog -> xr_outcome -> Prop :=
+| XRFail : forall m p1 p2,
+  exec m p1 Failed -> exec_recover m p1 p2 RFailed
 | XRFinished : forall m p1 p2 m',
-  exec m p1 m' Finished -> exec_recover m p1 p2 m' Finished
-| XRCrashed : forall m p1 p2 m' m'' out,
-  exec m p1 m' Crashed ->
-  exec_recover m' p2 p2 m'' out -> exec_recover m p1 p2 m'' out.
+  exec m p1 (Stopped m' Finished) -> exec_recover m p1 p2 (RFinished m')
+| XRCrashed : forall m p1 p2 m' out,
+  exec m p1 (Stopped m' Crashed) ->
+  exec_recover m' p2 p2 out -> exec_recover m p1 p2 out.
 
 Hint Constructors exec.
 Hint Constructors exec_recover.
 
 
 Theorem exec_need_not_crash : forall p m,
-  exists m' out, exec m p m' out /\ out <> Crashed.
+  exists out, exec m p out /\ forall m', out <> (Stopped m' Crashed).
 Proof.
   induction p.
-  - do 2 eexists; split.
+  - intros.
+    destruct (H tt m); destruct H0.
+    destruct (classic (p m)); eexists.
+    + split.
+      apply XCheckOK; try eassumption.
+      auto.
+    + split.
+      apply XCheckFail; try eassumption.
+      discriminate.
+  - eexists; split.
     constructor.
     discriminate.
   - intros.
     case_eq (m a); intros.
-    + edestruct H. destruct H1. destruct H1.
-      do 2 eexists; split.
+    + edestruct H. destruct H1.
+      eexists; split.
       * eapply XReadOK; eauto.
       * auto.
-    + do 2 eexists; split.
+    + eexists; split.
       * eapply XReadFail; eauto.
       * discriminate.
   - intros.
     case_eq (m a); intros.
-    + edestruct H. destruct H1. destruct H1.
-      do 2 eexists; split.
+    + edestruct H. destruct H1.
+      eexists; split.
       * eapply XWriteOK; eauto.
       * auto.
-    + do 2 eexists; split.
+    + eexists; split.
       * eapply XWriteFail; eauto.
       * discriminate.
 Qed.
 
 Theorem exec_recover_can_terminate : forall p1 p2 m,
-  exists m' out, exec_recover m p1 p2 m' out.
+  exists out, exec_recover m p1 p2 out.
 Proof.
   intros.
   destruct (exec_need_not_crash p1 m).
-  destruct H. destruct H.
-  do 2 eexists.
-  destruct x0; try congruence.
+  destruct H.
+  destruct x; try congruence; eexists.
   - apply XRFail; eauto.
-  - apply XRFinished; eauto.
+  - destruct c.
+    exfalso; apply (H0 m0); auto.
+    apply XRFinished; eauto.
 Qed.
 
-Theorem prog_can_crash : forall p m m' out,
-  exec m p m' out ->
-  exec m p m' Crashed.
+Theorem prog_can_crash : forall p m m' c,
+  exec m p (Stopped m' c) ->
+  exec m p (Stopped m' Crashed).
 Proof.
   induction p; intros.
+  - inversion H0; eauto.
   - inversion H; eauto.
   - inversion H0; eauto.
   - inversion H0; eauto.

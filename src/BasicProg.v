@@ -28,12 +28,12 @@ Ltac inv_option :=
 
 Ltac inv_exec_recover :=
   match goal with
-  | [ H: exec_recover _ _ _ _ _ |- _ ] => inversion H; clear H; subst
+  | [ H: exec_recover _ _ _ _ |- _ ] => inversion H; clear H; subst
   end.
 
 Ltac inv_exec :=
   match goal with
-  | [ H: exec _ _ _ _ |- _ ] => inversion H; clear H; subst
+  | [ H: exec _ _ _ |- _ ] => inversion H; clear H; subst
   end.
 
 Theorem read_ok:
@@ -46,7 +46,7 @@ Proof.
   unfold corr, exis; intros; repeat deex.
   repeat ( apply sep_star_lift2and in H; destruct H ).
   unfold lift in *; simpl in *.
-  inv_exec_recover; auto; inv_exec.
+  inv_exec_recover; eauto; inv_exec.
   - apply ptsto_valid in H. congruence.
   - eapply H2. eauto.
     apply ptsto_valid in H. repeat inv_option.
@@ -69,7 +69,7 @@ Proof.
   unfold corr, exis; intros; repeat deex.
   repeat ( apply sep_star_lift2and in H; destruct H ).
   unfold lift in *; simpl in *.
-  inv_exec_recover; auto; inv_exec.
+  inv_exec_recover; eauto; inv_exec.
   - apply ptsto_valid in H. congruence.
   - eapply H2. instantiate (1:=upd m a v).
     eapply ptsto_upd; eauto.

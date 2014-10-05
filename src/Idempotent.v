@@ -3,7 +3,7 @@ Require Import Prog.
 Require Import Pred.
 
 Definition preserves_precondition (pre : pred) p :=
-  forall m m' out, pre m -> exec m p m' out -> pre m' /\ out <> Failed.
+  forall m out, pre m -> exec m p out -> exists m' s, out = (Stopped m' s) /\ pre m'.
 
 Theorem pp_lift : forall pre P p,
   preserves_precondition pre p ->
@@ -12,7 +12,8 @@ Proof.
   unfold preserves_precondition; intros.
   apply sep_star_lift2and in H0; destruct H0.
   edestruct H; clear H; eauto.
-  intuition.
+  destruct H3.
+  do 2 eexists; intuition eauto.
   apply sep_star_and2lift.
   split; eauto.
 Qed.
@@ -27,12 +28,16 @@ Proof.
   intros.
 
   match goal with
-  | [ H: exec_recover _ _ _ _ _ |- _ ] => induction H; subst; auto
+  | [ H: exec_recover _ _ _ _ |- _ ] => induction H; subst; eauto
   end.
 
-  edestruct H; eauto; congruence.
-  apply IHexec_recover; auto.
-  edestruct H; eauto.
+  - edestruct H; eauto. destruct H0. destruct H0. congruence.
+  - discriminate.
+  - apply IHexec_recover; eauto.
+    edestruct H; eauto.
+    destruct H0; destruct H0.
+    inversion H0.
+    eauto.
 Qed.
 
 Theorem idempotent_ok : forall p pre,
@@ -43,22 +48,8 @@ Proof.
   eapply idempotent_ok'; eauto.
 Qed.
 
-Parameter recover : prog -> prog.
-Parameter rpre : pred.
-
-Axiom recover_preserves : forall rx, preserves_precondition rpre (recover rx).
-
-Theorem recover_idempotent : forall rx,
-  {{ rpre }} recover rx >> recover rx.
-Proof.
-  intros.
-  apply idempotent_ok.
-  apply recover_preserves.
-Qed.
-
 Theorem corr_to_pp : forall p1 p2 pre1 pre2,
   {{ pre1 }} p1 >> Check pre2 ;; p2 ->
-  (pre1 ==> [ {{ pre2 }} p2 >> Check pre2 ;; p2 ]) ->
   (pre1 ==> [ pre2 ==> pre1 ]) ->
   preserves_precondition pre1 p1.
 Proof.
@@ -66,37 +57,60 @@ Proof.
   intros.
   unfold corr in H.
   destruct out.
-  - assert (Failed = Finished); try discriminate.
-    eapply H.
-    eauto.
-    eauto.
-  - split; try discriminate.
-(*
-    assert (exec m p1 m' Crashed) by ( eapply prog_can_crash; eauto ).
-*)
-    admit.
+  - exfalso.
+    destruct (H m RFailed); eauto.
+  - do 2 eexists; split; eauto.
 
-  - split; try discriminate.
-    assert ({{ pre2 }} p2 >> Check pre2 ;; p2) by firstorder.
-    unfold corr in H4.
+    assert (exec m p1 (Stopped m0 Crashed)) by ( eapply prog_can_crash; eauto ).
+    clear H2.
 
-    destruct (exec_recover_can_terminate p2 p2 m').
-    destruct H5.
-
-    assert (x0 = Finished); subst.
-    eapply H.
-    eauto.
-    eapply XRCrashed.
-    eauto.
-    eauto.
-
-    (* XXX what i really want here is for [{{ pre2 }} p2 >> p2] to be
-     * a necessary -- not just sufficient -- precondition for getting
-     * a Finished outcome from p2.  then i could prove that indeed
-     * p1 establishes pre2 at every crash point, and thus implies that
-     * p1 is precondition-preserving.
-     *)
-
-    admit.
-
+    assert (forall out, exec m0 (Check pre2 ;; p2) out -> out <> Failed).
+    + unfold not in *; intros; subst; eauto.
+    + destruct (exec_need_not_crash (Check pre2 ;; p2) m0).
+      destruct H4.
+      inversion H4; subst.
+      * exfalso. edestruct H2; eauto.
+      * eapply H0; eauto.
+      * exfalso. edestruct H5; eauto.
 Qed.
+
+
+(* Sketch of how we might prove recover's idempotence *)
+
+Parameter recover : prog -> prog.
+Parameter log_intact : pred.
+Parameter recovered : pred.
+
+Theorem recover_base_ok : forall rx rec,
+  {{ log_intact
+   * [[ {{ recovered }} rec >> Check log_intact ;; rec ]]
+  }} recover rx >> Check log_intact ;; rec.
+Admitted.
+
+Theorem recover_preserves : forall rx rec,
+  preserves_precondition
+    (log_intact * [[ {{ recovered }} rec >> Check log_intact ;; rec ]])
+    (recover rx).
+Proof.
+  intros.
+  eapply corr_to_pp.
+  eapply pimpl_ok. apply recover_base_ok. apply pimpl_refl.
+  apply sep_star_lift_l; intros.
+  unfold lift, pimpl; intros.
+  apply sep_star_and2lift; unfold lift.
+  split; eauto.
+Qed.
+
+Theorem recover_idempotent_ok : forall rec,
+  {{ log_intact
+   * [[ {{ recovered }} rec >> Check log_intact ;; rec ]]
+  }} recover rec >> recover rec.
+Proof.
+  intros.
+  apply idempotent_ok.
+  apply recover_preserves.
+Qed.
+
+(* XXX might need to change exec's definition to prohibit crashing
+ * on a Check op..
+ *)
