@@ -1056,19 +1056,14 @@ Module LOG.
       eapply natToWord_discriminate; [|eauto]; rewrite valulen_is; omega
     end : false_precondition_hint.
 
-  Theorem recover_ok : forall xp rx rec,
+  Theorem recover_ok : forall xp rx,
     {{ (exists m F, rep xp (NoTransaction m) * F
-        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; rec ]]
-        * [[ {{ rep xp (NoTransaction m) * F }} rec >> Check (intact xp) ;; rec ]])
+        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; Done tt ]])
     \/ (exists m m' F, rep xp (ActiveTxn m m') * F
-        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; rec ]]
-        * [[ {{ rep xp (ActiveTxn m m') * F
-             \/ rep xp (NoTransaction m) * F }} rec >> Check (intact xp) ;; rec ]])
+        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; Done tt ]])
     \/ (exists m F, rep xp (CommittedTxn m) * F
-        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; rec ]]
-        * [[ {{ rep xp (CommittedTxn m) * F
-             \/ rep xp (NoTransaction m) * F }} rec >> Check (intact xp) ;; rec ]])
-    }} recover xp rx >> Check (intact xp) ;; rec.
+        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; Done tt ]])
+    }} recover xp rx >> Check (intact xp) ;; Done tt.
   Proof.
     unfold recover, intact; hoare_unfold log_unfold.
   Qed.
@@ -1077,18 +1072,20 @@ Module LOG.
 
   Theorem recover_idem_ok : forall xp rx,
     {{ (exists m F, rep xp (NoTransaction m) * F
-        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; rx tt ]])
+        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; Done tt ]])
     \/ (exists m m' F, rep xp (ActiveTxn m m') * F
-        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; rx tt ]])
+        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; Done tt ]])
     \/ (exists m F, rep xp (CommittedTxn m) * F
-        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; rx tt ]])
+        * [[ {{ rep xp (NoTransaction m) * F }} rx tt >> Check (intact xp) ;; Done tt ]])
     }} recover xp rx >> recover xp rx.
   Proof.
     intros.
     apply idempotent_ok.
     eapply corr_to_pp.
-    eapply pimpl_ok.
     apply recover_ok.
+    unfold intact.
+    cancel; (eapply pimpl_trans; [| apply pimpl_star_emp ]);
+      unfold lift; do 2 intro.
   Abort.
 
 End LOG.
