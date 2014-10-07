@@ -37,8 +37,9 @@ Ltac inv_exec :=
   end.
 
 Theorem read_ok:
-  forall (a:addr) (rx:valu->prog) (post:pred2),
-  {{ exists v F, a |-> v * F
+  forall (a:addr) (rx:valu->prog) post,
+  forall v F,
+  {{ a |-> v * F
    * [[{{ a |-> v * F }} (rx v) {{ post }}]]
   }} Read a rx {{ post }}.
 Proof.
@@ -55,10 +56,11 @@ Qed.
 Hint Extern 1 ({{_}} progseq (Read _) _ {{_}}) => apply read_ok : prog.
 
 Theorem write_ok:
-  forall (a:addr) (v:valu) (rx:unit->prog) (post:pred2),
-  {{ exists v0 F, a |-> v0 * F
+  forall (a:addr) (v:valu) (rx:unit->prog) post,
+  forall v0 F,
+  {{ a |-> v0 * F
    * [[{{ a |-> v * F }} rx tt {{ post }}]]
-  }} Write a v rx {{ unchanged \/ post [ a <--- v ] }}.
+  }} Write a v rx {{ fun r => (a |-> v0 * F * [[r = Crashed]]) \/ (post r) }}.
 Proof.
   unfold corr, exis; intros; repeat deex.
   repeat ( apply sep_star_lift2and in H; destruct H ).
@@ -72,15 +74,57 @@ Proof.
     right. eauto.
   - unfold nonfail.
     split.
-    left. unfold unchanged. eauto.
+    left.
+    apply sep_star_and2lift.
+    split.
+    eauto.
+    unfold lift; auto.
     discriminate.
 Qed.
 
 Hint Extern 1 ({{_}} progseq (Write _ _) _ {{_}}) => apply write_ok : prog.
 
+Definition two_writes a1 v1 a2 v2 rx :=
+  Write a1 v1 ;; Write a2 v2 ;; rx tt.
+
+Theorem two_writes_ok : forall a1 v1 a2 v2 rx post,
+  forall v1' v2' F,
+  {{ a1 |-> v1' * a2 |-> v2' * F
+   * [[ {{ a1 |-> v1 * a2 |-> v2 * F }} rx tt {{ post }} ]]
+  }} two_writes a1 v1 a2 v2 rx
+  {{ fun r =>
+    (a1 |-> v1' * a2 |-> v2' * F * [[r=Crashed]]) \/
+    (a1 |-> v1  * a2 |-> v2' * F * [[r=Crashed]]) \/
+    (post r) }}.
+Proof.
+  unfold two_writes.
+  intros.
+  eapply pimpl_ok.
+  eauto with prog.
+  cancel.
+
+  eapply pimpl_ok.
+  eauto with prog.
+  cancel.
+
+  eapply pimpl_ok.
+  eauto with prog.
+  cancel.
+
+  intros.
+  cancel.
+
+  intros; simpl.
+  eapply pimpl_refl.
+
+  intros; simpl.
+  cancel.
+Qed.
+
 Definition If_ P Q (b : {P} + {Q}) (p1 p2 : prog) :=
   if b then p1 else p2.
 
+(*
 Theorem if_ok:
   forall P Q (b : {P}+{Q}) p1 p2 post1 post2,
   {{ exists pre, pre
@@ -118,6 +162,7 @@ Proof.
   intros.
   apply wlt_lt; auto.
 Qed.
+*)
 
 (*
 Definition For_ (L : Set) (G : Type) (f : addr -> L -> (L -> prog) -> prog)

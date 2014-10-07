@@ -88,49 +88,6 @@ Notation "m @ a |-> v" := (diskptsto m a v) (a at level 34, at level 35).
 Definition mem_except (m: mem) (a: addr) :=
   fun a' => if addr_eq_dec a' a then None else m a'.
 
-(* Predicates on two disks (before and after) *)
-
-Definition pred2 := mem -> mem -> Prop.
-
-Definition and2 (p q : pred2) : pred2 :=
-  fun m1 m2 => p m1 m2 /\ q m1 m2.
-Infix "/\" := and2 : pred2_scope.
-
-Bind Scope pred2_scope with pred2.
-Delimit Scope pred2_scope with pred2.
-
-Definition or2 (p q : pred2) : pred2 :=
-  fun m1 m2 => p m1 m2 \/ q m1 m2.
-Infix "\/" := or2 : pred2_scope.
-
-Definition foral2_ A (p : A -> pred2) : pred2 :=
-  fun m1 m2 => forall x, p x m1 m2.
-Notation "'foral' x .. y , p" :=
-  (foral2_ (fun x => .. (foral2_ (fun y => p)) ..))
-  (at level 200, x binder, right associativity) : pred2_scope.
-
-Definition exis2 A (p : A -> pred2) : pred2 :=
-  fun m1 m2 => exists x, p x m1 m2.
-Notation "'exists' x .. y , p" :=
-  (exis2 (fun x => .. (exis2 (fun y => p)) ..)) : pred2_scope.
-
-Definition before (p : pred) : pred2 :=
-  fun m1 m2 => p m1.
-
-Definition after (p : pred) : pred2 :=
-  fun m1 m2 => p m2.
-
-Definition pupd2 (p : pred2) (a : addr) (v : valu) : pred2 :=
-  fun m1 m2 => p (upd m1 a v) m2.
-Notation "p [ a <--- v ]" := (pupd2 p a v) (at level 0) : pred2_scope.
-
-Definition unchanged (m1 m2: mem) := m1 = m2.
-
-Definition pimpl2 (p q : pred2) := forall m1 m2, p m1 m2 -> q m1 m2.
-Notation "p ===> q" := (pimpl2 p%pred2 q%pred2) (right associativity, at level 90).
-
-Definition any2 : pred2 :=
-  fun m1 m2 => True.
 
 (* Useful tactics and lemmas *)
 
@@ -150,12 +107,7 @@ Proof.
   pred.
 Qed.
 
-Theorem pimpl2_refl : forall p, p ===> p.
-Proof.
-  firstorder.
-Qed.
-
-Hint Resolve pimpl_refl pimpl2_refl.
+Hint Resolve pimpl_refl.
 
 Theorem mem_disjoint_comm:
   forall m1 m2,
@@ -734,86 +686,5 @@ Proof.
 Qed.
 
 Definition pair_args_helper (A B C:Type) (f: A->B->C) (x: A*B) := f (fst x) (snd x).
-
-Theorem pimpl2_and:
-  forall p p' q q',
-  (p ===> p') ->
-  (q ===> q') ->
-  (p /\ q ===> p' /\ q').
-Proof.
-  firstorder.
-Qed.
-
-Theorem pimpl2_and_l:
-  forall p q r,
-  (p ===> r) ->
-  (p /\ q ===> r).
-Proof.
-  firstorder.
-Qed.
-
-Theorem pimpl2_and_r:
-  forall p q r,
-  (p ===> r) ->
-  (q /\ p ===> r).
-Proof.
-  firstorder.
-Qed.
-
-Lemma pimpl2_exists_r:
-  forall T p q,
-  (exists x:T, p ===> q x) ->
-  (p ===> exists x:T, q x).
-Proof.
-  firstorder.
-Qed.
-
-Lemma pimpl2_exists_l:
-  forall T p q,
-  (forall x:T, p x ===> q) ->
-  ((exists x:T, p x) ===> q).
-Proof.
-  firstorder.
-Qed.
-
-Lemma pimpl2_or_split:
-  forall p q r,
-  (p ===> r) ->
-  (q ===> r) ->
-  (p \/ q ===> r).
-Proof.
-  firstorder.
-Qed.
-
-Lemma pimpl2_or_l:
-  forall p q r,
-  (p ===> q) ->
-  (p ===> q \/ r).
-Proof.
-  firstorder.
-Qed.
-
-Lemma pimpl2_or_r:
-  forall p q r,
-  (p ===> r) ->
-  (p ===> q \/ r).
-Proof.
-  firstorder.
-Qed.
-
-Lemma pimpl2_before:
-  forall p q,
-  (p ==> q) ->
-  (before p ===> before q).
-Proof.
-  firstorder.
-Qed.
-
-Lemma pimpl2_any:
-  forall p,
-  p ===> any2.
-Proof.
-  firstorder.
-Qed.
 
 Opaque sep_star.

@@ -30,9 +30,7 @@ Definition addr_eq_dec := @weq addrlen.
 Definition wringaddr := wring addrlen.
 Add Ring wringaddr : wringaddr (decidable (weqb_sound addrlen), constants [wcst]).
 
-Parameter donetoken : Set.
-
-Inductive prog :=
+Inductive prog : Set -> Type :=
 | Done (t: donetoken)
 | Read (a: addr) (rx: valu -> prog)
 | Write (a: addr) (v: valu) (rx: unit -> prog).

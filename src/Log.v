@@ -10,7 +10,9 @@ Require Import FunctionalExtensionality.
 Require Import Word.
 Require Import Omega.
 Require Import Eqdep_dec.
+(*
 Require Import Array.
+*)
 
 Set Implicit Arguments.
 
@@ -29,19 +31,20 @@ Record xparams := {
 
 Hint Extern 0 (okToUnify (diskIs _) (diskIs _)) => constructor : okToUnify.
 
+  Definition logentry := (addr * valu)%type.
+  Definition log := list logentry.
+
 Inductive logstate :=
 | NoTransaction (cur : mem)
 (* Don't touch the disk directly in this state. *)
-| ActiveTxn (old : mem) (cur : mem)
+| ActiveTxn (old : mem) (log : log) (cur : mem)
 (* A transaction is in progress.
  * It started from the first memory and has evolved into the second.
  * It has not committed yet. *)
-| CommittedTxn (cur : mem)
+| CommittedTxn (old : mem) (log : log) (cur : mem)
 (* A transaction has committed but the log has not been applied yet. *).
 
 Module LOG.
-  Definition logentry := (addr * valu)%type.
-  Definition log := list logentry.
 
   (* Actually replay a log to implement redo in a memory. *)
   Fixpoint replay (l : log) (m : mem) : mem :=
@@ -256,16 +259,16 @@ Module LOG.
       * data_rep m
       * log_rep xp m nil
 
-      | ActiveTxn old cur =>
+      | ActiveTxn old log cur =>
         (LogCommit xp) |-> $0
       * data_rep old
-      * exists log, log_rep xp old log
+      * log_rep xp old log
       * cur_rep old log cur
 
-      | CommittedTxn cur =>
+      | CommittedTxn old log cur =>
         (LogCommit xp) |-> $1
-      * exists old, data_rep old
-      * exists log, log_rep xp old log
+      * data_rep old
+      * log_rep xp old log
       * cur_rep old log cur
     end%pred.
 
@@ -280,16 +283,35 @@ Module LOG.
     rx tt.
 
   Theorem init_ok : forall xp rx,
-    {{ exists old F, F
+    forall old F lc ll,
+    {{ F
      * data_rep old
      * avail_region (LogStart xp) (wordToNat (LogLen xp) * 2)
-     * (LogCommit xp) |->?
-     * (LogLength xp) |->?
-     * [[ {{ rep xp (NoTransaction old) * F }} rx tt {{ any2 }} ]]
-    }} init xp rx {{ any2 }}.
+     * (LogCommit xp) |-> lc
+     * (LogLength xp) |-> ll
+     * [[ {{ rep xp (NoTransaction old) * F }} rx tt {{ r, any }} ]]
+    }} init xp rx {{ r, any }}.
   Proof.
     unfold init; log_unfold.
-    hoare.
+    intros.
+    eapply pimpl_ok.
+    eauto with prog.
+    cancel.
+    eapply pimpl_ok.
+    eauto with prog.
+    cancel.
+    eapply pimpl_ok.
+    eauto with prog.
+    cancel.
+
+    intros; simpl.
+    apply pimpl_refl.
+
+    intros; simpl.
+    apply pimpl_refl.
+
+    intros; simpl.
+    cancel.
   Qed.
 
   Hint Extern 1 ({{_}} progseq (init _) _ {{_}}) => apply init_ok : prog.
@@ -298,50 +320,37 @@ Module LOG.
     Write (LogLength xp) (addr2valu $0) ;;
     rx tt.
 
-  Definition any_valid_log xp : pred2 :=
-    (exists m F, after (rep xp (NoTransaction m) * F)) \/
-    (exists m m' F, after (rep xp (ActiveTxn m m') * F)) \/
-    (exists m F, after (rep xp (CommittedTxn m) * F)).
-
-  Theorem begin_ok_1 : forall xp rx post,
-    {{ exists m F, rep xp (NoTransaction m) * F
-     * [[{{ rep xp (ActiveTxn m m) * F }} rx tt
-         {{ after (post m F) }}]]
+  Theorem begin_ok : forall xp rx post,
+    forall m F,
+    {{ rep xp (NoTransaction m) * F
+     * [[{{ rep xp (ActiveTxn m nil m) * F }} rx tt
+         {{ post }}]]
     }} begin xp rx
-    {{
-       exists m F, before (rep xp (NoTransaction m) * F) /\
-                   (unchanged \/ after (post m F))
+    {{ fun r => (rep xp (NoTransaction m) * F * [[r=Crashed]]) \/
+          (post r)
     }}.
-  Admitted.
-
-  Theorem begin_ok_2 : forall xp rx post,
-    {{ exists m F, rep xp (NoTransaction m) * F
-     * [[{{ rep xp (ActiveTxn m m) * F }} rx tt
-         {{ before (rep xp (ActiveTxn m m) * F) /\
-            after (post m F) }}]]
-    }} begin xp rx
-    {{
-       exists m F, before (rep xp (NoTransaction m) * F) /\
-                   (unchanged \/ after (post m F))
-    }}.
-  Admitted.
-
-(*
   Proof.
     unfold begin; log_unfold.
-    hoare.
+    intros.
+    eapply pimpl_ok.
+    eauto with prog.
+    cancel.
+    eapply pimpl_ok.
+    eauto with prog.
+    cancel.
+    intros; simpl.
+    apply pimpl_refl.
+    intros; simpl.
+    cancel.
   Qed.
-
-  Hint Extern 1 ({{_}} progseq (begin _) _ {{_}}) => apply begin_ok : prog.
-*)
 
   Hint Extern 1 (_ =!=> avail_region _ _) =>
     match goal with
     | [ H: norm_goal (?L ==> ?R) |- _ ] =>
       match L with
-      | context[logentry_ptsto_list ?xp ?l _] =>
+      | context[logentry_ptsto_list ?xp' ?l' _] =>
         eapply pimpl_trans ;
-        [ apply avail_region_grow_all with (xp:=xp) (l:=l); omega
+        [ apply avail_region_grow_all with (xp:=xp') (l:=l'); omega
         | apply eq_pimpl; f_equal; try omega; fold (wzero addrlen); ring ]
       end
     end : norm_hint_right.
@@ -351,79 +360,117 @@ Module LOG.
     rx tt.
 
   Theorem abort_ok : forall xp rx post,
-    {{ exists m1 m2 F, rep xp (ActiveTxn m1 m2) * F
+    forall m1 log m2 F,
+    {{ rep xp (ActiveTxn m1 log m2) * F
      * [[ {{ rep xp (NoTransaction m1) * F }} rx tt
-          {{ after (post m1 F) }} ]]
+          {{ post }} ]]
     }} abort xp rx {{
-       exists m1 m2 F, before (rep xp (ActiveTxn m1 m2) * F) /\
-                       (unchanged \/ after (post m1 F))
+       fun r => (rep xp (ActiveTxn m1 log m2) * F * [[r=Crashed]]) \/
+                (post r)
+    }}.
+  Proof.
+    unfold abort; log_unfold.
+    intros.
+    eapply pimpl_ok.
+    eauto with prog.
+    cancel.
+    eapply pimpl_ok.
+    eauto with prog.
+    cancel.
+
+    intros; simpl.
+    apply pimpl_refl.
+    intros; simpl.
+    unfold stars; simpl.
+    cancel.
+    apply stars_or_left.
+    unfold stars; simpl.
+    cancel.
+  Admitted.
+
+  Hint Extern 1 ({{_}} progseq (abort _) _ {{_}}) => apply abort_ok : prog.
+
+  Definition write (xp : xparams) (a : addr) (v : valu) (rx : bool->prog) : prog.
+  Admitted.
+
+  Theorem write_ok : forall xp a v rx post,
+    forall m1 m2 F F' v0 log m' log',
+    {{ rep xp (ActiveTxn m1 log m2) * F
+     * [[ (a |-> v0 * F')%pred m2 ]]
+     * [[ {{ rep xp (ActiveTxn m1 log' m') * F
+           * [[ (a |-> v * F')%pred m' ]] }} rx true {{ post }} ]]
+     * [[ {{ rep xp (ActiveTxn m1 log m2) * F }} rx false {{ post }} ]]
+    }} write xp a v rx {{
+      fun r => (rep xp (ActiveTxn m1 log m2) * F * [[r=Crashed]]) \/
+               (post r)
     }}.
   Admitted.
 
-(*
-  Proof.
-    unfold abort; log_unfold.
-    hoare.
-  Qed.
-
-  Hint Extern 1 ({{_}} progseq (abort _) _ >> _) => apply abort_ok : prog.
-*)
-
   Definition begin_abort xp rx :=
-    begin xp ;; abort xp ;; rx.
+    begin xp ;; _ <- write xp $0 $1 ; abort xp ;; rx.
+
+  Hint Extern 0 (okToUnify (rep _ _) (rep _ _)) =>
+    unfold okToUnify; constructor : okToUnify.
 
   Theorem begin_abort_ok: forall xp rx post,
-    {{ exists m F, rep xp (NoTransaction m) * F
+    forall m F v0 F',
+    {{ rep xp (NoTransaction m) * F
+     * [[ ($0 |-> v0 * F')%pred m ]] 
      * [[ {{ rep xp (NoTransaction m) * F }} rx
-          {{ after (post m F) }} ]]
+          {{ post }} ]]
     }} begin_abort xp rx {{
-       exists m F, before (rep xp (NoTransaction m) * F) /\
-                   (unchanged \/
-                    after (exists m', rep xp (ActiveTxn m m') * F)%pred \/
-                    after (post m F))
+       fun r => (rep xp (NoTransaction m) * F * [[r=Crashed]]) \/
+                (exists m' log, rep xp (ActiveTxn m log m') * F * [[r=Crashed]]) \/
+                (post r)
     }}.
   Proof.
     unfold begin_abort.
     intros.
 
-    repeat ( apply corr_or || apply corr_exists; intro ).
+    eapply pimpl_ok.
+    apply begin_ok.
+    cancel.
 
     eapply pimpl_ok.
-    apply begin_ok_1.
+    apply write_ok.
     cancel.
+    pred_apply.
     cancel.
 
     eapply pimpl_ok.
     apply abort_ok.
     cancel.
+
+    eapply pimpl_ok.
+    eauto.
     cancel.
 
+    intros; simpl.
+    apply pimpl_refl.
+
+    intros; simpl.
+    apply pimpl_refl.
+
+    eapply pimpl_ok.
+    apply abort_ok.
+    cancel.
+
+    eapply pimpl_ok.
     eauto.
+    cancel.
 
-    unfold pimpl2.
-    intros.
-    destruct H0.
-    destruct H2.
-    destruct H2.
-    destruct H2.
-    destruct H2.
-    instantiate (1:=(fun m F => (rep xp (ActiveTxn m m) * F \/ post m F)%pred)).
-    unfold after.
-    destruct H3.
-    unfold unchanged in H3. subst.
-    unfold before in H0.
-    left. apply H0.
-    unfold after in H3.
+    intros; simpl.
+    apply pimpl_refl.
 
-    unfold after.
+    intros; simpl.
+    cancel.
 
+    intros; simpl.
+    apply pimpl_refl.
 
-    apply pimpl2_and_r.
-    apply pimpl2_exists_l; intro.
-    apply pimpl2_exists_l; intro.
-    apply pimpl2_exists_l; intro.
-    apply pimpl2_and_r.
-
+    intros; simpl.
+    cancel.
+  Qed.
 
   Hint Extern 1 (?L =!=> _) =>
     match L with

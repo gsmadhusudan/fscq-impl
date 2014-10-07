@@ -6,31 +6,33 @@ Set Implicit Arguments.
 
 (** ** Hoare triples *)
 
-Definition nonfail (post: pred2) (m m': mem) out :=
-  post m m' /\ out <> Failed.
+Definition nonfail (post: outcome -> pred) (m m': mem) out :=
+  post out m' /\ out <> Failed.
 
-Definition corr (pre: pred) (post: pred2) (p: prog) :=
+Definition corr (pre: pred) (post: outcome -> pred) (p: prog) :=
   forall m m' out,
   pre m ->
   exec m p m' out ->
   nonfail post m m' out.
 
-Notation "{{ pre }} p {{ post }}" := (corr pre%pred post%pred2 p)
+Notation "{{ pre }} p {{ post }}" := (corr pre%pred post%pred p)
   (at level 70, p at level 60).
 
+Notation "{{ pre }} p {{ r, post }}" := (corr pre%pred (fun r => (post%pred)) p)
+  (at level 70, p at level 60, r at level 0).
+
 Theorem pimpl_ok:
-  forall pre pre' pr post post',
+  forall pre pre' pr (post post' : outcome -> pred),
   {{pre'}} pr {{post'}} ->
   (pre ==> pre') ->
-  (before pre /\ post' ===> post) ->
+  (forall rr, post' rr ==> post rr) ->
   {{pre}} pr {{post}}.
 Proof.
   unfold corr, nonfail.
   intros.
   edestruct H; eauto.
-  split; eauto.
-  apply H1.
-  split; eauto.
+  intuition.
+  apply H1; auto.
 Qed.
 
 Theorem pimpl_ok_cont :
@@ -38,7 +40,7 @@ Theorem pimpl_ok_cont :
   {{pre'}} k y {{post'}} ->
   (pre ==> pre') ->
   (pre ==> exists F, F * [[x = y]]) ->
-  (post' ===> post) ->
+  (forall rr, post' rr ==> post rr) ->
   {{pre}} k x {{post}}.
 Proof.
   unfold corr, pimpl; intros.
@@ -51,15 +53,18 @@ Proof.
 Qed.
 
 Theorem pimpl_pre:
-  forall pre pre' pr post,
-  (pre ==> [{{pre'}} pr {{post}}]) ->
+  forall pre pre' pr post post',
+  (pre ==> [{{pre'}} pr {{post'}}]) ->
   (pre ==> pre') ->
+  (forall rr, post' rr ==> post rr) ->
   {{pre}} pr {{post}}.
 Proof.
-  unfold corr, pimpl, lift.
-  eauto.
+  unfold corr, pimpl, lift, nonfail.
+  intros.
+  edestruct H; eauto.
 Qed.
 
+(*
 Theorem corr_exists_pre:
   forall T pre p post,
   (forall (a:T), {{ pre a }} p {{ post }}) ->
@@ -79,7 +84,6 @@ Proof.
   destruct H0.
   edestruct H; eauto.
   split; eauto.
-  eexists; eauto.
 Qed.
 
 Theorem corr_or:
@@ -90,3 +94,4 @@ Theorem corr_or:
 Proof.
   firstorder.
 Qed.
+*)
