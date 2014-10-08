@@ -6,92 +6,54 @@ Set Implicit Arguments.
 
 (** ** Hoare triples *)
 
-Definition nonfail (post: outcome -> pred) (m m': mem) out :=
-  post out m' /\ out <> Failed.
+Definition postok (R: Set) (out: @outcome R) (post: R -> pred) (crash: pred) :=
+  match out with
+  | Failed => False
+  | Crashed m => crash m
+  | Finished v m => post v m
+  end.
 
-Definition corr (pre: pred) (post: outcome -> pred) (p: prog) :=
-  forall m m' out,
+Definition corr (R: Set) (p1: prog R) (p2: prog unit)
+                (pre: pred) (post: R -> pred) (crash: pred) :=
+  forall m out,
   pre m ->
-  exec m p m' out ->
-  nonfail post m m' out.
+  exec_recover m p1 p2 out ->
+  postok out post crash.
 
-Notation "{{ pre }} p {{ post }}" := (corr pre%pred post%pred p)
-  (at level 70, p at level 60).
-
-Notation "{{ pre }} p {{ r, post }}" := (corr pre%pred (fun r => (post%pred)) p)
-  (at level 70, p at level 60, r at level 0).
+Notation "{{ pre }} p1 >> p2 {{ post >> crash }}" := (corr p1 p2 pre%pred post%pred crash%pred)
+  (at level 70, p1 at level 60, p2 at level 60).
 
 Theorem pimpl_ok:
-  forall pre pre' pr (post post' : outcome -> pred),
-  {{pre'}} pr {{post'}} ->
+  forall R pre pre' (pr: prog R) rec (post post': R -> pred) crash crash',
+  ({{pre'}} pr >> rec {{post' >> crash'}}) ->
   (pre ==> pre') ->
-  (forall rr, post' rr ==> post rr) ->
-  {{pre}} pr {{post}}.
+  (forall r, post' r ==> post r) ->
+  (crash' ==> crash) ->
+  {{pre}} pr >> rec {{post >> crash}}.
 Proof.
-  unfold corr, nonfail.
-  intros.
-  edestruct H; eauto.
-  intuition.
-  apply H1; auto.
+  unfold corr; intros.
+  destruct out; unfold postok.
+  - eapply (H _ Failed); eauto.
+  - apply H2. eapply (H _ (Crashed _)); eauto.
+  - apply H1. eapply (H _ (Finished _ _)); eauto.
 Qed.
 
 Theorem pimpl_ok_cont :
-  forall pre pre' A (k : A -> _) x y post post',
-  {{pre'}} k y {{post'}} ->
+  forall pre pre' A R (k : A -> prog R) rec x y post post' crash crash',
+  {{pre'}} k y >> rec {{post' >> crash'}} ->
   (pre ==> pre') ->
   (pre ==> exists F, F * [[x = y]]) ->
   (forall rr, post' rr ==> post rr) ->
-  {{pre}} k x {{post}}.
+  (crash' ==> crash) ->
+  {{pre}} k x >> rec {{post >> crash}}.
 Proof.
   unfold corr, pimpl; intros.
-  edestruct H1; eauto.
-  eapply sep_star_lift_l in H5; [|instantiate (1:=([x=y])%pred)].
-  unfold lift in H5; rewrite H5 in *.
-  edestruct H; eauto.
-  unfold nonfail in *; eauto.
-  firstorder.
+  remember (H1 m H4) as Hpre; clear HeqHpre.
+  destruct Hpre.
+  eapply sep_star_lift_l in H6; [| instantiate (1:=([x=y])%pred); firstorder ].
+  unfold lift in *; subst.
+  destruct out; unfold postok.
+  - eapply (H _ Failed); eauto.
+  - apply H3. eapply (H _ (Crashed _)); eauto.
+  - apply H2. eapply (H _ (Finished _ _)); eauto.
 Qed.
-
-Theorem pimpl_pre:
-  forall pre pre' pr post post',
-  (pre ==> [{{pre'}} pr {{post'}}]) ->
-  (pre ==> pre') ->
-  (forall rr, post' rr ==> post rr) ->
-  {{pre}} pr {{post}}.
-Proof.
-  unfold corr, pimpl, lift, nonfail.
-  intros.
-  edestruct H; eauto.
-Qed.
-
-(*
-Theorem corr_exists_pre:
-  forall T pre p post,
-  (forall (a:T), {{ pre a }} p {{ post }}) ->
-  {{ exists a:T, pre a }} p {{ post }}.
-Proof.
-  unfold corr, exis; intros.
-  destruct H0.
-  eauto.
-Qed.
-
-Theorem corr_exists:
-  forall T pre p post,
-  (forall (a:T), {{ pre a }} p {{ post a }}) ->
-  {{ exists a:T, pre a }} p {{ exists a:T, post a }}.
-Proof.
-  unfold corr, exis; intros.
-  destruct H0.
-  edestruct H; eauto.
-  split; eauto.
-Qed.
-
-Theorem corr_or:
-  forall pre1 pre2 p post1 post2,
-  {{ pre1 }} p {{ post1 }} ->
-  {{ pre2 }} p {{ post2 }} ->
-  {{ pre1 \/ pre2 }} p {{ post1 \/ post2 }}.
-Proof.
-  firstorder.
-Qed.
-*)

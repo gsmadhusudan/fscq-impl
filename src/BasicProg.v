@@ -7,6 +7,7 @@ Require Import Word.
 Require Import Nomega.
 Require Import NArith.
 Require Import FunctionalExtensionality.
+Require Import Eqdep.
 
 Set Implicit Arguments.
 
@@ -26,98 +27,144 @@ Ltac inv_option :=
     end
   end.
 
+Ltac do_inj_pair2 :=
+  repeat match goal with
+  | [ H: existT _ _ _ = existT _ _ _ |- _ ] => apply inj_pair2 in H; subst
+  end.
+
 Ltac inv_exec_recover :=
   match goal with
-  | [ H: exec_recover _ _ _ _ _ |- _ ] => inversion H; clear H; subst
+  | [ H: exec_recover _ _ _ _ |- _ ] => inversion H; clear H; subst; do_inj_pair2
   end.
 
 Ltac inv_exec :=
   match goal with
-  | [ H: exec _ _ _ _ |- _ ] => inversion H; clear H; subst
+  | [ H: exec _ _ _ |- _ ] => inversion H; clear H; subst; do_inj_pair2
   end.
 
-Theorem read_ok:
-  forall (a:addr) (rx:valu->prog) post,
-  forall v F,
-  {{ a |-> v * F
-   * [[{{ a |-> v * F }} (rx v) {{ post }}]]
-  }} Read a rx {{ post }}.
+Lemma postok_null_recover: forall m R (p: prog R) rec out post crash,
+  exec_recover m p rec out
+  -> rec = Return tt
+  -> (forall out', exec m p out' -> postok out' post crash)
+  -> postok out post crash.
 Proof.
-  unfold corr, exis; intros; repeat deex.
-  repeat ( apply sep_star_lift2and in H; destruct H ).
-  unfold lift in *; simpl in *.
-  inv_exec; auto.
-  - apply ptsto_valid in H. congruence.
-  - remember H as Hm. clear HeqHm.
-    apply ptsto_valid in H. repeat inv_option.
-    eauto.
+  intros.
+  induction H; do_inj_pair2; subst; simpl.
+  - eapply (H1 Failed); eauto.
+  - eapply (H1 (Finished _ _)); eauto.
+  - eapply IHexec_recover with (post:=fun _ => crash); eauto; intros.
+    inv_exec; simpl; eapply (H1 (Crashed _)); eauto.
+    inv_exec; eauto.
+  - eapply IHexec_recover with (post:=fun _ => crash); eauto; intros.
+    inv_exec; simpl; eapply (H1 (Crashed _)); eauto.
+    inv_exec; eauto.
+  - eapply IHexec_recover with (post:=fun _ => crash); eauto; intros.
+    inv_exec; simpl; eapply (H1 (Crashed _)); eauto.
+    inv_exec; eauto.
 Qed.
 
-Hint Extern 1 ({{_}} progseq (Read _) _ {{_}}) => apply read_ok : prog.
+Theorem read_ok:
+  forall (a:addr),
+  forall v F,
+  {{ a |-> v * F }}
+  Read a >> Return tt
+  {{ fun r => a |-> v * F * [[r=v]]
+  >> a |-> v * F }}.
+Proof.
+  unfold corr; intros.
+  apply ptsto_valid in H as H'.
+  eapply postok_null_recover; eauto; intros.
+  inv_exec; simpl; repeat inv_option; try congruence.
+  apply sep_star_and2lift; split; firstorder.
+  inv_exec; eauto.
+Qed.
+
+Hint Extern 1 ({{_}} Read _ >> Return tt {{_>>_}}) => apply read_ok : prog.
 
 Theorem write_ok:
-  forall (a:addr) (v:valu) (rx:unit->prog) post,
+  forall (a:addr) (v:valu),
   forall v0 F,
-  {{ a |-> v0 * F
-   * [[{{ a |-> v * F }} rx tt {{ post }}]]
-  }} Write a v rx {{ fun r => (a |-> v0 * F * [[r = Crashed]]) \/ (post r) }}.
+  {{ a |-> v0 * F }}
+  Write a v >> Return tt
+  {{ fun _ => a |-> v * F
+  >> a |-> v0 * F \/ a |-> v * F }}.
 Proof.
-  unfold corr, exis; intros; repeat deex.
-  repeat ( apply sep_star_lift2and in H; destruct H ).
-  unfold lift in *; simpl in *.
-  inv_exec; auto.
-  - apply ptsto_valid in H. congruence.
-  - unfold nonfail, pupd in *.
-    edestruct H1; [ | eauto | ].
-    eapply ptsto_upd; eauto.
-    split; [|auto].
-    right. eauto.
-  - unfold nonfail.
-    split.
-    left.
-    apply sep_star_and2lift.
-    split.
-    eauto.
-    unfold lift; auto.
-    discriminate.
+  unfold corr; intros.
+  apply ptsto_valid in H as H'.
+  eapply postok_null_recover; eauto; intros.
+  inv_exec; simpl; repeat inv_option; try congruence.
+  - eapply ptsto_upd; eauto.
+  - eapply pimpl_apply. eapply pimpl_or_r; left; eauto. eauto.
+  - eapply pimpl_apply. eapply pimpl_or_r; right; eauto.
+    inv_exec. eapply ptsto_upd; eauto.
 Qed.
 
-Hint Extern 1 ({{_}} progseq (Write _ _) _ {{_}}) => apply write_ok : prog.
+Hint Extern 1 ({{_}} Write _ _ >> Return tt {{_>>_}}) => apply write_ok : prog.
 
-Definition two_writes a1 v1 a2 v2 rx :=
-  Write a1 v1 ;; Write a2 v2 ;; rx tt.
-
-Theorem two_writes_ok : forall a1 v1 a2 v2 rx post,
-  forall v1' v2' F,
-  {{ a1 |-> v1' * a2 |-> v2' * F
-   * [[ {{ a1 |-> v1 * a2 |-> v2 * F }} rx tt {{ post }} ]]
-  }} two_writes a1 v1 a2 v2 rx
-  {{ fun r =>
-    (a1 |-> v1' * a2 |-> v2' * F * [[r=Crashed]]) \/
-    (a1 |-> v1  * a2 |-> v2' * F * [[r=Crashed]]) \/
-    (post r) }}.
+Theorem seq_ok:
+  forall R S (p1: prog R) (p2: R -> prog S) rec,
+  forall pre1 post1 crash1 pre2 post2 crash2,
+  {{ pre1
+   * [[ {{ pre1 }} p1 >> rec {{ post1 >> crash1 }} ]]
+   * [[ forall r m, post1 r m -> {{ pre2 }} p2 r >> rec {{ post2 >> crash2 }} ]]
+   * [[ forall r, post1 r ==> pre2 ]]
+  }}
+  Seq p1 p2 >> rec
+  {{ post2
+  >> crash1 \/ crash2 }}.
 Proof.
-  unfold two_writes.
-  intros.
-  eapply pimpl_ok.
+  unfold corr; intros.
+  repeat ( apply sep_star_lift2and in H; destruct H; unfold lift in * ).
+  inv_exec_recover; simpl.
+  - inv_exec.
+    eapply (H3 _ Failed); eauto.
+    eapply (H2 _ _ _ _ Failed).
+    eapply H1; eapply (H3 _ (Finished _ _)); eauto.
+    eauto.
+  - inv_exec.
+    eapply H2 with (out:=(Finished _ _)); eauto.
+    eapply (H3 _ (Finished _ _)); eauto.
+    eapply H1. eapply (H3 _ (Finished _ _)); eauto.
+  - admit.
+  - admit.
+  - admit.
+Admitted.
+
+Hint Extern 1 ({{_}} Seq _ _ >> _ {{_>>_}}) => eapply seq_ok : prog.
+
+Definition two_writes a1 v1 a2 v2 :=
+  Write a1 v1 ;; Write a2 v2.
+
+Theorem two_writes_ok : forall a1 v1 a2 v2,
+  forall v1' v2' F,
+  {{ a1 |-> v1' * a2 |-> v2' * F }}
+  two_writes a1 v1 a2 v2 >> Return tt
+  {{ fun _ => a1 |-> v1 * a2 |-> v2 * F
+  >> (a1 |-> v1' * a2 |-> v2' * F) \/
+     (a1 |-> v1  * a2 |-> v2' * F) \/
+     (a1 |-> v1  * a2 |-> v2  * F) }}.
+Proof.
+  unfold two_writes; intros.
+  eapply pimpl_ok; intros.
   eauto with prog.
   cancel.
 
-  eapply pimpl_ok.
+  eapply pimpl_ok; intros.
   eauto with prog.
   cancel.
 
-  eapply pimpl_ok.
-  eauto with prog.
+  unfold stars; simpl.
   cancel.
 
-  intros.
+  apply pimpl_refl.
+
+  unfold stars; simpl.
   cancel.
 
-  intros; simpl.
-  eapply pimpl_refl.
+  unfold stars; simpl.
+  cancel.
 
-  intros; simpl.
+  unfold stars; simpl.
   cancel.
 Qed.
 
