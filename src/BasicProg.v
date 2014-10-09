@@ -207,7 +207,7 @@ False
 
 Inductive same_thing : forall (A B: Type), A -> B -> Prop :=
 | SameThing:
-  forall (A: Type) (a b: A), @same_thing A A a b.
+  forall (A: Type) (a b: A), a = b -> @same_thing A A a b.
 
 Theorem idempotent_recover_ok: forall R (p: prog R) rec pre post crash,
   forall crash',
@@ -225,34 +225,30 @@ Proof.
   - assert (crash' m') by ( eapply (H2 _ (Crashed _)); eauto ).
     clear H2 H7 pre H m p pre post R.
 
-    assert (exists rec', rec' = rec) as Hrec' by eauto. destruct Hrec'.
-    rename x into rec'.
-    rewrite <- H in H9 at 1.
-    assert (same_thing rec' rec) as Hsame by constructor; clear H.
-
-    assert (exists R, R = unit) as Hunit' by eauto. destruct Hunit'.
+    assert (exists R, unit = R) as H' by eauto; destruct H'.
     rename x into unit'.
 
-    assert (exists R, R = unit) as Hunit' by eauto. destruct Hunit'.
-    rename x into unit''.
+    assert (exists rec', rec = rec') as Hrec' by eauto. destruct Hrec'.
+    rename x into rec'.
+    rewrite H2 in H9 at 1.
+    rewrite H2 in H1.
+    assert (same_thing rec' rec) as Hsame by (constructor; eauto); clear H2.
 
+    generalize dependent H9.
+    generalize dependent H1.
     generalize dependent rec'.
-    rewrite <- H2.
-
-    rewrite <- H.
-
+    generalize unit at 1 2 4 5 7 8 9 10.
+    intros.
 
     induction H9.
-    inversion Hsame; do_inj_pair2.
 
-    
-inv_exec_recover.
-Focus 2.
- inversion H9.
-*)
-  - induction H9.
+    inversion Hsame.
+    do_inj_pair2.
+    subst.
 
+    (* XXX go back from R to unit... *)
 
+Abort.
 
 
 Definition If_ P Q R (b: {P} + {Q}) (p1 p2: prog R) :=
