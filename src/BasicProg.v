@@ -63,6 +63,17 @@ Proof.
     inv_exec; eauto.
 Qed.
 
+Lemma postok_pimpl: forall R (out: @outcome R) post post' crash crash', postok out post' crash'
+  -> (forall r, post' r ==> post r)
+  -> (crash' ==> crash)
+  -> postok out post crash.
+Proof.
+  intros; destruct out; intros; simpl.
+  eauto.
+  eapply pimpl_apply; eauto.
+  eapply pimpl_apply; eauto.
+Qed.
+
 Theorem read_ok:
   forall (a:addr),
   forall v F,
@@ -130,7 +141,7 @@ Proof.
   - admit.
 Admitted.
 
-Hint Extern 1 ({{_}} Seq _ _ >> _ {{_>>_}}) => eapply seq_ok : prog.
+Hint Extern 1 ({{_}} Seq _ _ >> _ {{_>>_}}) => apply seq_ok : prog.
 
 Definition two_writes a1 v1 a2 v2 :=
   Write a1 v1 ;; Write a2 v2.
@@ -168,31 +179,111 @@ Proof.
   cancel.
 Qed.
 
-Definition If_ P Q (b : {P} + {Q}) (p1 p2 : prog) :=
-  if b then p1 else p2.
-
-(*
-Theorem if_ok:
-  forall P Q (b : {P}+{Q}) p1 p2 post1 post2,
-  {{ exists pre, pre
-   * [[{{ pre * [[P]] }} p1 {{ post1 }}]]
-   * [[{{ pre * [[Q]] }} p2 {{ post2 }}]]
-  }} If_ b p1 p2 {{ post1 \/ post2 }}.
+Lemma corr_null_to_exec: forall R (p: prog R) pre post crash,
+  (forall m out, pre m -> exec_recover m p (Return tt) out -> postok out post crash)
+  -> (forall m out, pre m -> exec m p out -> postok out post crash).
 Proof.
-  unfold corr, exis; intros; repeat deex.
-  repeat ( apply sep_star_lift2and in H; destruct H ).
-  unfold lift in *. destruct b.
-  - edestruct H2; eauto.
-    apply sep_star_and2lift; split; eauto.
-    split; eauto.
-    left; eauto.
-  - edestruct H1; eauto.
-    apply sep_star_and2lift; split; eauto.
-    split; eauto.
-    right; eauto.
+  intros.
+  eapply H; eauto.
+  destruct out; eauto.
 Qed.
 
-Hint Extern 1 ({{_}} If_ _ _ _ {{_}}) => apply if_ok : prog.
+(*
+
+1 subgoal
+rec : prog unit
+crash : pred
+crash' : pred
+H1 : forall (m : mem) (out : outcome),
+     crash' m -> exec_recover m rec (Return tt) out -> postok out (fun _ : unit => crash) crash'
+m' : mem
+H9 : exec_recover m' rec rec Failed
+H0 : crash' m'
+______________________________________(1/1)
+False
+
+
+*)
+
+Inductive same_thing : forall (A B: Type), A -> B -> Prop :=
+| SameThing:
+  forall (A: Type) (a b: A), @same_thing A A a b.
+
+Theorem idempotent_recover_ok: forall R (p: prog R) rec pre post crash,
+  forall crash',
+  {{ pre
+   * [[ {{ pre }} p >> Return tt {{ post >> crash' }} ]]
+   * [[ {{ crash' }} rec >> Return tt {{ fun _ => crash >> crash' }} ]]
+  }} p >> rec
+  {{ post >> crash }}.
+Proof.
+  unfold corr; intros.
+  repeat ( apply sep_star_lift2and in H; destruct H; unfold lift in * ).
+  inv_exec_recover; simpl.
+  - eapply H2 with (out:=Failed); eauto.
+  - eapply H2 with (out:=Finished _ _); eauto.
+  - assert (crash' m') by ( eapply (H2 _ (Crashed _)); eauto ).
+    clear H2 H7 pre H m p pre post R.
+
+    assert (exists rec', rec' = rec) as Hrec' by eauto. destruct Hrec'.
+    rename x into rec'.
+    rewrite <- H in H9 at 1.
+    assert (same_thing rec' rec) as Hsame by constructor; clear H.
+
+    assert (exists R, R = unit) as Hunit' by eauto. destruct Hunit'.
+    rename x into unit'.
+
+    assert (exists R, R = unit) as Hunit' by eauto. destruct Hunit'.
+    rename x into unit''.
+
+    generalize dependent rec'.
+    rewrite <- H2.
+
+    rewrite <- H.
+
+
+    induction H9.
+    inversion Hsame; do_inj_pair2.
+
+    
+inv_exec_recover.
+Focus 2.
+ inversion H9.
+*)
+  - induction H9.
+
+
+
+
+Definition If_ P Q R (b: {P} + {Q}) (p1 p2: prog R) :=
+  if b then p1 else p2.
+
+Theorem if_ok:
+  forall P Q R (b: {P}+{Q}) (p1 p2: prog R) rec,
+  forall pre post1 post2 crash1 crash2,
+  {{ pre
+   * [[{{ pre * [[P]] }} p1 >> rec {{ post1 >> crash1 }}]]
+   * [[{{ pre * [[Q]] }} p2 >> rec {{ post2 >> crash2 }}]]
+  }} If_ b p1 p2 >> rec
+  {{ fun r => ([[P]] * post1 r) \/ ([[Q]] * post2 r)
+  >> ([[P]] * crash1) \/ ([[Q]] * crash2) }}.
+Proof.
+  unfold corr, If_; intros.
+  repeat ( apply sep_star_lift2and in H; destruct H; unfold lift in * ).
+  destruct b.
+  - eapply postok_pimpl; intros.
+    eapply H2; eauto.
+    apply sep_star_and2lift; split; eauto.
+    cancel.
+    cancel.
+  - eapply postok_pimpl; intros.
+    eapply H1; eauto.
+    apply sep_star_and2lift; split; eauto.
+    cancel.
+    cancel.
+Qed.
+
+Hint Extern 1 ({{_}} If_ _ _ _ >> _ {{_>>_}}) => apply if_ok : prog.
 Notation "'If' b { p1 } 'else' { p2 }" := (If_ b p1 p2) (at level 9, b at level 0).
 
 Record For_args (L : Set) := {
@@ -209,7 +300,6 @@ Proof.
   intros.
   apply wlt_lt; auto.
 Qed.
-*)
 
 (*
 Definition For_ (L : Set) (G : Type) (f : addr -> L -> (L -> prog) -> prog)

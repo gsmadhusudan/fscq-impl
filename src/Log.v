@@ -31,8 +31,8 @@ Record xparams := {
 
 Hint Extern 0 (okToUnify (diskIs _) (diskIs _)) => constructor : okToUnify.
 
-  Definition logentry := (addr * valu)%type.
-  Definition log := list logentry.
+Definition logentry := (addr * valu)%type.
+Definition log := list logentry.
 
 Inductive logstate :=
 | NoTransaction (cur : mem)
@@ -45,7 +45,6 @@ Inductive logstate :=
 (* A transaction has committed but the log has not been applied yet. *).
 
 Module LOG.
-
   (* Actually replay a log to implement redo in a memory. *)
   Fixpoint replay (l : log) (m : mem) : mem :=
     match l with
@@ -277,72 +276,59 @@ Module LOG.
 
   Ltac log_unfold := unfold rep, data_rep, cur_rep, log_rep.
 
-  Definition init xp rx :=
+  Definition init xp :=
     Write (LogLength xp) (addr2valu $0) ;;
-    Write (LogCommit xp) $0 ;;
-    rx tt.
+    Write (LogCommit xp) $0.
 
-  Theorem init_ok : forall xp rx,
+  Theorem init_ok : forall xp,
     forall old F lc ll,
     {{ F
      * data_rep old
      * avail_region (LogStart xp) (wordToNat (LogLen xp) * 2)
      * (LogCommit xp) |-> lc
      * (LogLength xp) |-> ll
-     * [[ {{ rep xp (NoTransaction old) * F }} rx tt {{ r, any }} ]]
-    }} init xp rx {{ r, any }}.
+    }} init xp >> Return tt
+    {{ fun _ => rep xp (NoTransaction old) * F
+    >> any }}.
   Proof.
     unfold init; log_unfold.
     intros.
-    eapply pimpl_ok.
+    eapply pimpl_ok; intros.
     eauto with prog.
     cancel.
-    eapply pimpl_ok.
+    eapply pimpl_ok; intros.
     eauto with prog.
     cancel.
-    eapply pimpl_ok.
-    eauto with prog.
-    cancel.
-
-    intros; simpl.
-    apply pimpl_refl.
-
-    intros; simpl.
-    apply pimpl_refl.
-
-    intros; simpl.
-    cancel.
+    eapply pimpl_refl.
+    eapply pimpl_refl.
+    unfold stars; simpl. cancel.
+    unfold stars; simpl. cancel.
+    unfold stars; simpl. cancel.
   Qed.
 
-  Hint Extern 1 ({{_}} progseq (init _) _ {{_}}) => apply init_ok : prog.
+  Hint Extern 1 ({{_}} init _ >> Return tt {{_>>_}}) => apply init_ok : prog.
 
-  Definition begin xp rx :=
-    Write (LogLength xp) (addr2valu $0) ;;
-    rx tt.
+  Definition begin xp :=
+    Write (LogLength xp) (addr2valu $0).
 
-  Theorem begin_ok : forall xp rx post,
+  Theorem begin_ok : forall xp,
     forall m F,
     {{ rep xp (NoTransaction m) * F
-     * [[{{ rep xp (ActiveTxn m nil m) * F }} rx tt
-         {{ post }}]]
-    }} begin xp rx
-    {{ fun r => (rep xp (NoTransaction m) * F * [[r=Crashed]]) \/
-          (post r)
-    }}.
+    }} begin xp >> Return tt
+    {{ fun _ => rep xp (ActiveTxn m nil m) * F
+    >> (rep xp (NoTransaction m) * F) \/
+       (rep xp (ActiveTxn m nil m) * F) }}.
   Proof.
     unfold begin; log_unfold.
     intros.
-    eapply pimpl_ok.
+    eapply pimpl_ok; intros.
     eauto with prog.
     cancel.
-    eapply pimpl_ok.
-    eauto with prog.
-    cancel.
-    intros; simpl.
-    apply pimpl_refl.
-    intros; simpl.
-    cancel.
+    unfold stars; simpl. cancel.
+    unfold stars; simpl. cancel.
   Qed.
+
+  Hint Extern 1 ({{_}} begin _ >> Return tt {{_>>_}}) => apply begin_ok : prog.
 
   Hint Extern 1 (_ =!=> avail_region _ _) =>
     match goal with
@@ -355,25 +341,48 @@ Module LOG.
       end
     end : norm_hint_right.
 
-  Definition abort xp rx :=
-    Write (LogLength xp) (addr2valu $0) ;;
-    rx tt.
+  Definition abort xp :=
+    Write (LogLength xp) (addr2valu $0).
 
-  Theorem abort_ok : forall xp rx post,
+  Theorem abort_ok : forall xp,
     forall m1 log m2 F,
     {{ rep xp (ActiveTxn m1 log m2) * F
-     * [[ {{ rep xp (NoTransaction m1) * F }} rx tt
-          {{ post }} ]]
-    }} abort xp rx {{
-       fun r => (rep xp (ActiveTxn m1 log m2) * F * [[r=Crashed]]) \/
-                (post r)
-    }}.
+    }} abort xp >> Return tt
+    {{ fun _ => rep xp (NoTransaction m1) * F
+    >> (rep xp (NoTransaction m1) * F) \/
+       (rep xp (ActiveTxn m1 log m2) * F) }}.
   Proof.
     unfold abort; log_unfold.
     intros.
-    eapply pimpl_ok.
+    eapply pimpl_ok; intros.
     eauto with prog.
+(*
+eapply start_normalizing; [ flatten | flatten | ].
+eapply pimpl_exists_l; intros.
+apply sep_star_lift_l; intros.
+
+norm'l.
+
     cancel.
+    unfold stars; simpl.
+set_norm_goal.
+norm'l.
+norm'r.
+eapply replace_right.
+apply pick_later_and.
+apply pick_later_and.
+apply pick_later_and.
+split. apply PickFirst. constructor.
+apply pimpl_hide.
+eauto with norm_hint_right.
+
+        eapply pimpl_trans ;
+        [ apply avail_region_grow_all with (xp:=xp) (l:=log0)
+        | apply eq_pimpl; f_equal; try omega; fold (wzero addrlen); ring ].
+
+eauto with norm_hint_right.
+
+cancel.
     eapply pimpl_ok.
     eauto with prog.
     cancel.
@@ -386,91 +395,160 @@ Module LOG.
     apply stars_or_left.
     unfold stars; simpl.
     cancel.
+*)
   Admitted.
 
-  Hint Extern 1 ({{_}} progseq (abort _) _ {{_}}) => apply abort_ok : prog.
+  Hint Extern 1 ({{_}} abort _ >> Return tt {{_>>_}}) => apply abort_ok : prog.
 
-  Definition write (xp : xparams) (a : addr) (v : valu) (rx : bool->prog) : prog.
+  Definition write (xp : xparams) (a : addr) (v : valu) : prog bool.
   Admitted.
 
-  Theorem write_ok : forall xp a v rx post,
+  Theorem write_ok : forall xp a v,
     forall m1 m2 F F' v0 log m' log',
     {{ rep xp (ActiveTxn m1 log m2) * F
      * [[ (a |-> v0 * F')%pred m2 ]]
-     * [[ {{ rep xp (ActiveTxn m1 log' m') * F
-           * [[ (a |-> v * F')%pred m' ]] }} rx true {{ post }} ]]
-     * [[ {{ rep xp (ActiveTxn m1 log m2) * F }} rx false {{ post }} ]]
-    }} write xp a v rx {{
-      fun r => (rep xp (ActiveTxn m1 log m2) * F * [[r=Crashed]]) \/
-               (post r)
-    }}.
+    }} write xp a v >> Return tt
+    {{ fun r => ([[r=true]] * rep xp (ActiveTxn m1 log' m') * F *
+                 [[ (a |-> v * F')%pred m' ]]) \/
+                ([[r=false]] * rep xp (ActiveTxn m1 log m2) * F)
+    >> (rep xp (ActiveTxn m1 log m2) * F) \/
+       (rep xp (ActiveTxn m1 log' m') * F) }}.
   Admitted.
 
-  Definition begin_abort xp rx :=
-    begin xp ;; _ <- write xp $0 $1 ; abort xp ;; rx.
+  Hint Extern 1 ({{_}} write _ _ _ >> Return tt {{_>>_}}) => apply write_ok : prog.
+
+  Definition begin_write_abort xp :=
+    begin xp ;;
+    _ <- write xp $0 $1 ;
+    abort xp.
 
   Hint Extern 0 (okToUnify (rep _ _) (rep _ _)) =>
     unfold okToUnify; constructor : okToUnify.
 
-  Theorem begin_abort_ok: forall xp rx post,
+  Theorem begin_write_abort_ok: forall xp,
     forall m F v0 F',
     {{ rep xp (NoTransaction m) * F
      * [[ ($0 |-> v0 * F')%pred m ]] 
-     * [[ {{ rep xp (NoTransaction m) * F }} rx
-          {{ post }} ]]
-    }} begin_abort xp rx {{
-       fun r => (rep xp (NoTransaction m) * F * [[r=Crashed]]) \/
-                (exists m' log, rep xp (ActiveTxn m log m') * F * [[r=Crashed]]) \/
-                (post r)
-    }}.
+    }} begin_write_abort xp >> Return tt
+    {{ fun _ => rep xp (NoTransaction m) * F
+    >> (rep xp (NoTransaction m) * F) \/
+       (exists log' m', rep xp (ActiveTxn m log' m') * F) }}.
   Proof.
-    unfold begin_abort.
+    unfold begin_write_abort.
     intros.
 
-    eapply pimpl_ok.
-    apply begin_ok.
+    eapply pimpl_ok; intros.
+    eauto with prog.
     cancel.
 
-    eapply pimpl_ok.
-    apply write_ok.
+    eapply pimpl_ok; intros.
+    eauto with prog.
     cancel.
+
+    unfold stars; simpl.
+    apply pimpl_refl.
+
+    unfold stars; simpl.
+    apply pimpl_refl.
+
+    unfold stars; simpl.
+    cancel.
+
+    eapply pimpl_ok; intros.
+    eauto with prog.
+
+    unfold stars; simpl.
+    cancel.
+
     pred_apply.
     cancel.
 
-    eapply pimpl_ok.
-    apply abort_ok.
-    cancel.
-
-    eapply pimpl_ok.
-    eauto.
-    cancel.
-
-    intros; simpl.
+    unfold stars; simpl.
     apply pimpl_refl.
 
-    intros; simpl.
+    unfold stars; simpl.
     apply pimpl_refl.
 
-    eapply pimpl_ok.
-    apply abort_ok.
+    unfold stars; simpl.
     cancel.
 
-    eapply pimpl_ok.
-    eauto.
+    unfold stars; simpl.
     cancel.
 
-    intros; simpl.
-    apply pimpl_refl.
-
-    intros; simpl.
-    cancel.
-
-    intros; simpl.
-    apply pimpl_refl.
-
-    intros; simpl.
+    unfold stars; simpl.
     cancel.
   Qed.
+
+  Hint Extern 1 ({{_}} begin_write_abort _ >> Return tt {{_>>_}}) => apply begin_write_abort_ok : prog.
+
+  Theorem begin_write_abort_twice_ok: forall xp,
+    forall m F v0 F',
+    {{ rep xp (NoTransaction m) * F
+     * [[ ($0 |-> v0 * F')%pred m ]] 
+    }} begin_write_abort xp ;; begin_write_abort xp >> Return tt
+    {{ fun _ => rep xp (NoTransaction m) * F
+    >> (rep xp (NoTransaction m) * F) \/
+       (exists log' m', rep xp (ActiveTxn m log' m') * F) }}.
+  Proof.
+    intros.
+
+    eapply pimpl_ok; intros.
+    eauto with prog.
+    cancel.
+
+    eapply pimpl_ok; intros.
+    eauto with prog.
+    cancel.
+
+    pred_apply.
+    cancel.
+
+    unfold stars; simpl.
+    apply pimpl_refl.
+
+    unfold stars; simpl.
+    apply pimpl_refl.
+
+    unfold stars; simpl.
+    cancel.
+
+    pred_apply.
+    cancel.
+
+    unfold stars; simpl.
+    cancel.
+
+    unfold stars; simpl.
+    cancel.
+  Qed.
+
+  Definition recover (xp : xparams) : prog unit.
+  Admitted.
+
+  Theorem recover_ok : forall xp,
+    forall m log m' F,
+    {{ (rep xp (NoTransaction m) * F) \/
+       (rep xp (ActiveTxn m log m') * F) \/
+       (rep xp (CommittedTxn m' log m) * F)
+    }} recover xp >> Return tt
+    {{ fun _ => rep xp (NoTransaction m) * F
+    >> (rep xp (NoTransaction m) * F) \/
+       (rep xp (ActiveTxn m log m') * F) \/
+       (rep xp (CommittedTxn m' log m) * F) }}.
+  Admitted.
+
+  Hint Extern 1 ({{_}} recover _ >> Return tt {{_>>_}}) => apply recover_ok : prog.
+
+  Theorem begin_write_abort_recoverable_ok: forall xp,
+    forall m F v0 F',
+    {{ rep xp (NoTransaction m) * F
+     * [[ ($0 |-> v0 * F')%pred m ]] 
+    }} begin_write_abort xp >> recover xp
+    {{ fun _ => rep xp (NoTransaction m) * F
+    >> rep xp (NoTransaction m) * F }}.
+  Proof.
+    intros.
+    
 
   Hint Extern 1 (?L =!=> _) =>
     match L with
