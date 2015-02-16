@@ -235,14 +235,14 @@ Proof.
   apply IHn; omega.
 Qed.
 
-Lemma in_selN : forall t n l (z:t) {deft : Defaultable t},
+Lemma in_selN : forall t n l {deft : Defaultable t},
   n < length l -> In (selN l n) l.
 Proof.
-  intros; repeat rewrite nth_selN_eq with (z:=z) by auto.
+  intros; repeat rewrite nth_selN_eq with (z:=the_default) by auto.
   apply nth_In; assumption.
 Qed.
 
-Lemma in_sel : forall t n l (z:t) {deft : Defaultable t},
+Lemma in_sel : forall t n l {deft : Defaultable t},
   wordToNat n < length l -> In (sel l n) l.
 Proof.
   intros. apply in_selN; assumption.

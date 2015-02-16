@@ -22,9 +22,9 @@ Section RECARRAY.
     simpl; rewrite app_length; rewrite IHl; trivial.
   Qed.
 
-  Lemma nested_selN_concat : forall t a b m l (z:t), b < m ->
+  Lemma nested_selN_concat : forall t {deft: Defaultable t} a b m (l : list (list t)), b < m ->
     Forall (fun sl => length sl = m) l ->
-    selN (selN l a nil) b z = selN (fold_right (app (A:=t)) nil l) (b + a * m) z.
+    selN (selN l a) b = selN (fold_right (app (A:=t)) nil l) (b + a * m).
   Proof.
     induction a; intros; destruct l; simpl; inversion H0.
     trivial.
@@ -38,18 +38,18 @@ Section RECARRAY.
 
   (** If we index into the concatenation of a list of length-[m] lists, it's
       the same as indexing into the [n % m]'th element of the [n / m]'th list *)
-  Lemma nested_sel_divmod_concat : forall t l n m (z:t), m <> $0 ->
+  Lemma nested_sel_divmod_concat : forall t {deft : Defaultable t} (l : list (list t)) n m, m <> $0 ->
     Forall (fun sl => length sl = wordToNat m) l ->
-    sel (sel l (n ^/ m) nil) (n ^% m) z = sel (fold_right (app (A:=t)) nil l) n z.
+    sel (sel l (n ^/ m)) (n ^% m) = sel (fold_right (app (A:=t)) nil l) n.
   Proof.
     intros. unfold sel. erewrite nested_selN_concat; word2nat_auto.
     rewrite Nat.mul_comm. rewrite Nat.add_comm. rewrite <- Nat.div_mod; auto.
   Qed.
 
-  Theorem selN_list_eq' : forall A len (vs vs' : list A) default,
+  Theorem selN_list_eq' : forall A {defA : Defaultable A} len (vs vs' : list A),
     length vs = len
     -> length vs' = len
-    -> (forall i, i < len -> selN vs i default = selN vs' i default)
+    -> (forall i, i < len -> selN vs i = selN vs' i)
     -> vs = vs'.
   Proof.
     induction len.
@@ -62,18 +62,18 @@ Section RECARRAY.
       apply (H1 (S i)); omega.
   Qed.
 
-  Theorem selN_list_eq : forall A (vs vs' : list A) default,
+  Theorem selN_list_eq : forall A {defA : Defaultable A} (vs vs' : list A),
     length vs = length vs'
-    -> (forall i, i < length vs -> selN vs i default = selN vs' i default)
+    -> (forall i, i < length vs -> selN vs i = selN vs' i)
     -> vs = vs'.
   Proof.
     intros.
     eapply selN_list_eq'; [ apply eq_refl | auto | auto ].
   Qed.
 
-  Theorem selN_updN_ne : forall vs n n' v, n < length vs
+  Theorem selN_updN_ne : forall A {defA : Defaultable A} (vs : list A) n n' v, n < length vs
     -> n <> n'
-    -> selN (updN vs n v) n' ($0 : valu) = selN vs n' ($0 : valu).
+    -> selN (updN vs n v) n' = selN vs n'.
   Proof.
     induction vs; destruct n'; destruct n; simpl; intuition; try omega.
   Qed.
@@ -91,10 +91,8 @@ Section RECARRAY.
   Variable itemtype : Rec.type.
   Variable items_per_valu : addr.
   Definition item := Rec.data itemtype.
-  Definition item_zero := @Rec.of_word itemtype $0.
   Definition blocktype : Rec.type := Rec.ArrayF itemtype (wordToNat items_per_valu).
   Definition block := Rec.data blocktype.
-  Definition block_zero := @Rec.of_word blocktype $0.
   Variable blocksz_ok : valulen = Rec.len blocktype.
 
   Theorem items_per_valu_not_0 : items_per_valu <> $0.
@@ -199,7 +197,7 @@ Section RECARRAY.
            [[ (block_ix < RALen xp)%word ]] *
            [[ (pos < items_per_valu)%word ]]
     POST:r MEMLOG.rep lxp (ActiveTxn mbase m) ms *
-           [[ r = sel (sel ilistlist block_ix nil) pos item_zero ]]
+           [[ r = sel (sel ilistlist block_ix) pos ]]
     CRASH  MEMLOG.log_intact lxp mbase
     >} get_pair lxp xp block_ix pos ms.
   Proof.
@@ -210,7 +208,7 @@ Section RECARRAY.
     word2nat_auto.
     subst.
     erewrite sel_map.
-    rewrite Rec.word_selN_equiv with (def:=item_zero).
+    rewrite Rec.word_selN_equiv.
     unfold rep_block. rewrite valu_wreclen_id. rewrite Rec.of_to_id.
     reflexivity.
     rewrite Forall_forall in *. apply H10. apply in_selN. abstract word2nat_auto.
@@ -227,7 +225,7 @@ Section RECARRAY.
              [[ (pos < items_per_valu)%word ]] *
              [[ Rec.well_formed i ]]
     POST:ms' exists m', MEMLOG.rep lxp (ActiveTxn mbase m') ms' *
-             [[ (array_item_pairs xp (upd ilistlist block_ix (upd (sel ilistlist block_ix nil) pos i)) * F)%pred (list2mem m') ]]
+             [[ (array_item_pairs xp (upd ilistlist block_ix (upd (sel ilistlist block_ix) pos i)) * F)%pred (list2mem m') ]]
     CRASH    MEMLOG.log_intact lxp mbase
     >} put_pair lxp xp block_ix pos i ms.
   Proof.
@@ -291,7 +289,7 @@ Section RECARRAY.
            [[ (F * array_item xp ilist)%pred (list2mem m) ]] *
            [[ (inum < RALen xp ^* items_per_valu)%word ]]
     POST:r MEMLOG.rep lxp (ActiveTxn mbase m) ms *
-           [[ r = sel ilist inum item_zero ]]
+           [[ r = sel ilist inum ]]
     CRASH  MEMLOG.log_intact lxp mbase
     >} get lxp xp inum ms.
   Proof.
@@ -322,7 +320,7 @@ Section RECARRAY.
     Forall Rec.well_formed l
     -> Array.upd (fold_right (@app _) nil l) pos v =
        fold_right (@app _) nil (Array.upd l (pos ^/ items_per_valu)
-         (Array.upd (sel l (pos ^/ items_per_valu) nil) (pos ^% items_per_valu) v)).
+         (Array.upd (sel l (pos ^/ items_per_valu)) (pos ^% items_per_valu) v)).
   Proof.
     intros. unfold upd. pose proof items_per_valu_not_0.
     rewrite <- updN_concat with (m := wordToNat items_per_valu).
