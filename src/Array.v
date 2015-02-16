@@ -20,18 +20,46 @@ Fixpoint arrayN {V : Type} (a : nat) (vs : list V) : @pred _ eq_nat_dec _ :=
 
 (** * Reading and writing from arrays *)
 
-Fixpoint selN (V : Type) (vs : list V) (n : nat) (default : V) : V :=
+Class Defaultable (T : Type) := {
+  the_default : T
+}.
+
+Instance valu_def : Defaultable valu := {
+  the_default := $0
+}.
+
+Instance word_def {len} : Defaultable (word len) := {
+  the_default := $0
+}.
+
+Instance nat_def : Defaultable nat := {
+  the_default := 0
+}.
+
+Instance list_def {T} : Defaultable (list T) := {
+  the_default := nil
+}.
+
+Instance pair_def {A B} {defA : Defaultable A} {defB : Defaultable B} : Defaultable (A * B) := {
+  the_default := (the_default, the_default)
+}.
+
+Instance valuset_def : Defaultable valuset := {
+  the_default := ($0, nil)
+}.
+
+Fixpoint selN (V : Type) {defV : Defaultable V} (vs : list V) (n : nat) : V :=
   match vs with
-    | nil => default
+    | nil => the_default
     | v :: vs' =>
       match n with
         | O => v
-        | S n' => selN vs' n' default
+        | S n' => selN vs' n'
       end
   end.
 
-Definition sel (V : Type) (vs : list V) (i : addr) (default : V) : V :=
-  selN vs (wordToNat i) default.
+Definition sel (V : Type) {defV : Defaultable V} (vs : list V) (i : addr) : V :=
+  selN vs (wordToNat i).
 
 Fixpoint updN T (vs : list T) (n : nat) (v : T) : list T :=
   match vs with
@@ -47,22 +75,16 @@ Definition upd T (vs : list T) (i : addr) (v : T) : list T :=
   updN vs (wordToNat i) v.
 
 Definition upd_prepend (vs : list valuset) (i : addr) (v : valu) : list valuset :=
-  upd vs i (v, valuset_list (sel vs i ($0, nil))).
+  upd vs i (v, valuset_list (sel vs i)).
 
-Definition upd_sync (vs : list valuset) (i : addr) (default : valuset) : list valuset :=
-  upd vs i (fst (sel vs i default), nil).
+Definition upd_sync (vs : list valuset) (i : addr) : list valuset :=
+  upd vs i (fst (sel vs i), nil).
 
 Notation "l [ i ]" := (selN l i _) (at level 56, left associativity).
 Notation "l [ i := v ]" := (updN l i v) (at level 76, left associativity).
 Notation "l $[ i ]" := (sel l i _) (at level 56, left associativity).
 Notation "l $[ i := v ]" := (upd l i v) (at level 76, left associativity).
 
-
-(** XXX use [nth] everywhere *)
-Lemma nth_selN_eq : forall t n l (z:t), selN l n z = nth n l z.
-Proof.
-  induction n; intros; destruct l; simpl; auto.
-Qed.
 
 Lemma length_updN : forall T vs n (v : T), length (updN vs n v) = length vs.
 Proof.
@@ -76,30 +98,30 @@ Qed.
 
 Hint Rewrite length_updN length_upd.
 
-Lemma selN_updN_eq : forall V vs n v (default : V),
+Lemma selN_updN_eq : forall V {defV : Defaultable V} vs n (v : V),
   n < length vs
-  -> selN (updN vs n v) n default = v.
+  -> selN (updN vs n v) n = v.
 Proof.
   induction vs; destruct n; simpl; intuition; omega.
 Qed.
 
-Lemma selN_updN_ne : forall V vs n n' v (default : V),
+Lemma selN_updN_ne : forall V {defV : Defaultable V} vs n n' (v : V),
   n <> n'
-  -> selN (updN vs n v) n' default = selN vs n' default.
+  -> selN (updN vs n v) n' = selN vs n'.
 Proof.
   induction vs; destruct n; destruct n'; simpl; intuition.
 Qed.
 
-Lemma sel_upd_eq : forall V vs i v (default : V),
+Lemma sel_upd_eq : forall V {defV : Defaultable V} vs i (v : V),
   wordToNat i < length vs
-  -> sel (upd vs i v) i default = v.
+  -> sel (upd vs i v) i = v.
 Proof.
   intros; apply selN_updN_eq; auto.
 Qed.
 
-Lemma sel_upd_ne : forall V vs i i' v (default : V),
+Lemma sel_upd_ne : forall V {defV : Defaultable V} vs i i' (v : V),
   i <> i'
-  -> sel (upd vs i v) i' default = sel vs i' default.
+  -> sel (upd vs i v) i' = sel vs i'.
 Proof.
   intros; apply selN_updN_ne.
   intro Heq. apply H; clear H.
@@ -135,8 +157,8 @@ Qed.
 
 Hint Rewrite firstn_updN firstn_upd using omega.
 
-Lemma skipn_selN : forall T i j vs (def: T),
-  selN (skipn i vs) j def = selN vs (i + j) def.
+Lemma skipn_selN : forall T {defT : Defaultable T} i j (vs : list T),
+  selN (skipn i vs) j = selN vs (i + j).
 Proof.
   induction i; intros; auto.
   destruct vs; simpl; auto.
@@ -181,10 +203,10 @@ Qed.
 
 Hint Rewrite skipn_updN skipn_upd using omega.
 
-Theorem list_selN_ext' : forall len T (a b : list T) default,
+Theorem list_selN_ext' : forall len T {defT : Defaultable T} (a b : list T),
   length a = len
   -> length b = len
-  -> (forall pos, pos < len -> selN a pos default = selN b pos default)
+  -> (forall pos, pos < len -> selN a pos = selN b pos)
   -> a = b.
 Proof.
   induction len; intros; destruct a; destruct b; simpl in *; try congruence.
@@ -197,23 +219,31 @@ Proof.
   omega.
 Qed.
 
-Theorem list_selN_ext : forall T (a b : list T) default,
+Theorem list_selN_ext : forall T {defT : Defaultable T} (a b : list T),
   length a = length b
-  -> (forall pos, pos < length a -> selN a pos default = selN b pos default)
+  -> (forall pos, pos < length a -> selN a pos = selN b pos)
   -> a = b.
 Proof.
-  intros. apply list_selN_ext' with (len:=length a) (default:=default); auto.
+  intros. eapply list_selN_ext' with (len:=length a); auto.
 Qed.
 
 
-Ltac nth_selN H := intros; repeat rewrite nth_selN_eq; apply H; assumption.
-
-Lemma in_selN : forall t n l (z:t), n < length l -> In (selN l n z) l.
+Lemma nth_selN_eq : forall t n l (z:t) {deft : Defaultable t},
+  n < length l -> selN l n = nth n l z.
 Proof.
-  nth_selN nth_In.
+  induction n; intros; destruct l; simpl in *; try omega; auto.
+  apply IHn; omega.
 Qed.
 
-Lemma in_sel : forall t n l (z:t), wordToNat n < length l -> In (sel l n z) l.
+Lemma in_selN : forall t n l (z:t) {deft : Defaultable t},
+  n < length l -> In (selN l n) l.
+Proof.
+  intros; repeat rewrite nth_selN_eq with (z:=z) by auto.
+  apply nth_In; assumption.
+Qed.
+
+Lemma in_sel : forall t n l (z:t) {deft : Defaultable t},
+  wordToNat n < length l -> In (sel l n) l.
 Proof.
   intros. apply in_selN; assumption.
 Qed.
@@ -238,15 +268,15 @@ Proof.
   subst. assumption.
 Qed.
 
-Lemma updN_selN_eq : forall T (l : list T) ix default,
-  updN l ix (selN l ix default) = l.
+Lemma updN_selN_eq : forall T {defT : Defaultable T} (l : list T) ix,
+  updN l ix (selN l ix) = l.
 Proof.
   induction l; auto.
   intros. destruct ix. auto. simpl. rewrite IHl. trivial.
 Qed.
 
-Lemma upd_sel_eq : forall T (l : list T) ix default,
-  upd l ix (sel l ix default) = l.
+Lemma upd_sel_eq : forall T {defT : Defaultable T} (l : list T) ix,
+  upd l ix (sel l ix) = l.
 Proof.
   unfold upd, sel. intros. apply updN_selN_eq.
 Qed.
@@ -282,7 +312,7 @@ Qed.
 Lemma updN_concat : forall t a b m l (v:t), b < m ->
   Forall (fun sl => length sl = m) l ->
   updN (fold_right (@app _) nil l) (b + a * m) v =
-    fold_right (@app _) nil (updN l a (updN (selN l a nil) b v)).
+    fold_right (@app _) nil (updN l a (updN (selN l a) b v)).
 Proof.
   (* XXX this is almost exactly the same as selN_concat *)
   induction a; intros; destruct l; simpl; inversion H0.
@@ -295,16 +325,24 @@ Proof.
   rewrite IHa; auto.
 Qed.
 
-Lemma selN_app1 : forall t l l' (d:t) n,
-  n < length l -> selN (l ++ l') n d = selN l n d.
+Lemma selN_app1 : forall t {deft : Defaultable t} l l' n,
+  n < length l -> selN (l ++ l') n = selN l n.
 Proof.
-  nth_selN app_nth1.
+  intros.
+  rewrite nth_selN_eq with (z:=the_default).
+  rewrite nth_selN_eq with (z:=the_default) by auto.
+  apply app_nth1; auto.
+  rewrite app_length; omega.
 Qed.
 
-Lemma selN_app2 : forall t l l' (d:t) n,
-  n >= length l -> selN (l ++ l') n d = selN l' (n - length l) d.
+Lemma selN_app2 : forall t {deft : Defaultable t} l l' n,
+  n >= length l -> selN (l ++ l') n = selN l' (n - length l).
 Proof.
-  nth_selN app_nth2.
+  induction l; simpl; intros.
+  - f_equal; omega.
+  - destruct n; try omega.
+    replace (S n - S (length l)) with (n - length l) by omega.
+    apply IHl; omega.
 Qed.
 
 Lemma map_ext_in : forall A B (f g : A -> B) l, (forall a, In a l -> f a = g a)
@@ -343,24 +381,24 @@ Qed.
 
 Hint Rewrite map_updN map_upd.
 
-Theorem selN_map_seq' : forall T i n f base (default : T), i < n
-  -> selN (map f (seq base n)) i default = f (i + base).
+Theorem selN_map_seq' : forall T {defT : Defaultable T} i n f base, i < n
+  -> selN (map f (seq base n)) i = f (i + base).
 Proof.
   induction i; destruct n; simpl; intros; try omega; auto.
   replace (S (i + base)) with (i + (S base)) by omega.
   apply IHi; omega.
 Qed.
 
-Theorem selN_map_seq : forall T i n f (default : T), i < n
-  -> selN (map f (seq 0 n)) i default = f i.
+Theorem selN_map_seq : forall T {defT : Defaultable T} i n f, i < n
+  -> selN (map f (seq 0 n)) i = f i.
 Proof.
   intros.
   replace i with (i + 0) at 2 by omega.
   apply selN_map_seq'; auto.
 Qed.
 
-Theorem sel_map_seq : forall T i n f (default : T), (i < n)%word
-  -> sel (map f (seq 0 (wordToNat n))) i default = f (wordToNat i).
+Theorem sel_map_seq : forall T {defT : Defaultable T} i n f, (i < n)%word
+  -> sel (map f (seq 0 (wordToNat n))) i = f (wordToNat i).
 Proof.
   intros.
   unfold sel.
@@ -370,16 +408,20 @@ Qed.
 
 Hint Rewrite selN_map_seq sel_map_seq using ( solve [ auto ] ).
 
-Theorem selN_map : forall T T' l i f (default : T) (default' : T'), i < length l
-  -> selN (map f l) i default = f (selN l i default').
+Theorem selN_map : forall T T' {defT : Defaultable T} {defT' : Defaultable T'} l i
+  (f : T' -> T),
+  i < length l
+  -> selN (map f l) i = f (selN l i).
 Proof.
   induction l; simpl; intros; try omega.
   destruct i; auto.
   apply IHl; omega.
 Qed.
 
-Theorem sel_map : forall T T' l i f (default : T) (default' : T'), wordToNat i < length l
-  -> sel (map f l) i default = f (sel l i default').
+Theorem sel_map : forall T T' {defT : Defaultable T} {defT' : Defaultable T'} l i
+  (f : T' -> T),
+  wordToNat i < length l
+  -> sel (map f l) i = f (sel l i).
 Proof.
   intros.
   unfold sel.
@@ -465,10 +507,10 @@ Qed.
 
 (** * Isolating an array cell *)
 
-Lemma isolate_fwd' : forall V vs i a stride (default : V),
+Lemma isolate_fwd' : forall V {defV : Defaultable V} vs i a stride,
   i < length vs
   -> array a vs stride =p=> array a (firstn i vs) stride
-     * (a ^+ $ i ^* stride) |-> selN vs i default
+     * (a ^+ $ i ^* stride) |-> selN vs i
      * array (a ^+ ($ i ^+ $1) ^* stride) (skipn (S i) vs) stride.
 Proof.
   induction vs; simpl; intuition.
@@ -491,10 +533,10 @@ Proof.
   cancel.
 Qed.
 
-Theorem isolate_fwd : forall V (default : V) (a i : addr) vs stride,
+Theorem isolate_fwd : forall V {defV : Defaultable V} (a i : addr) vs stride,
   wordToNat i < length vs
   -> array a vs stride =p=> array a (firstn (wordToNat i) vs) stride
-     * (a ^+ i ^* stride) |-> sel vs i default
+     * (a ^+ i ^* stride) |-> sel vs i
      * array (a ^+ (i ^+ $1) ^* stride) (skipn (S (wordToNat i)) vs) stride.
 Proof.
   intros.
@@ -504,10 +546,10 @@ Proof.
   apply pimpl_refl.
 Qed.
 
-Lemma isolateN_fwd' : forall V vs i a (default : V),
+Lemma isolateN_fwd' : forall V {defV : Defaultable V} vs i a,
   i < length vs
   -> arrayN a vs =p=> arrayN a (firstn i vs)
-     * (a + i) |-> selN vs i default
+     * (a + i) |-> selN vs i
      * arrayN (a + i + 1) (skipn (S i) vs).
 Proof.
   induction vs; simpl; intuition.
@@ -528,10 +570,10 @@ Proof.
   cancel.
 Qed.
 
-Theorem isolateN_fwd : forall V (default : V) a i vs,
+Theorem isolateN_fwd : forall V {defV : Defaultable V} a i vs,
   i < length vs
   -> arrayN a vs =p=> arrayN a (firstn i vs)
-     * (a + i) |-> selN vs i default
+     * (a + i) |-> selN vs i
      * arrayN (a + i + 1) (skipn (S i) vs).
 Proof.
   intros.
@@ -541,10 +583,10 @@ Proof.
 Qed.
 
 
-Lemma isolate_bwd' : forall V vs i a stride (default : V),
+Lemma isolate_bwd' : forall V {defV : Defaultable V} vs i a stride,
   i < length vs
   -> array a (firstn i vs) stride
-     * (a ^+ $ i ^* stride) |-> selN vs i default
+     * (a ^+ $ i ^* stride) |-> selN vs i
      * array (a ^+ ($ i ^+ $1) ^* stride) (skipn (S i) vs) stride
   =p=> array a vs stride.
 Proof.
@@ -568,10 +610,10 @@ Proof.
   cancel.
 Qed.
 
-Theorem isolate_bwd : forall V (default : V) (a i : addr) vs stride,
+Theorem isolate_bwd : forall V {defV : Defaultable V} (a i : addr) vs stride,
   wordToNat i < length vs
   -> array a (firstn (wordToNat i) vs) stride
-     * (a ^+ i ^* stride) |-> sel vs i default
+     * (a ^+ i ^* stride) |-> sel vs i
      * array (a ^+ (i ^+ $1) ^* stride) (skipn (S (wordToNat i)) vs) stride
   =p=> array a vs stride.
 Proof.
@@ -582,10 +624,10 @@ Proof.
   apply pimpl_refl.
 Qed.
 
-Lemma isolateN_bwd' : forall V vs i a (default : V),
+Lemma isolateN_bwd' : forall V {defV : Defaultable V} vs i a,
   i < length vs
   -> arrayN a (firstn i vs)
-     * (a + i) |-> selN vs i default
+     * (a + i) |-> selN vs i
      * arrayN (a + i + 1) (skipn (S i) vs)
   =p=> arrayN a vs.
 Proof.
@@ -606,10 +648,10 @@ Proof.
   cancel.
 Qed.
 
-Theorem isolateN_bwd : forall V (default : V) a i vs,
+Theorem isolateN_bwd : forall V {defV : Defaultable V} a i vs,
   i < length vs
   -> arrayN a (firstn i vs)
-     * (a + i) |-> selN vs i default
+     * (a + i) |-> selN vs i
      * arrayN (a + i + 1) (skipn (S i) vs)
   =p=> arrayN a vs.
 Proof.
@@ -620,11 +662,11 @@ Proof.
 Qed.
 
 
-Theorem array_isolate : forall V (default : V) (a i : addr) vs stride,
+Theorem array_isolate : forall V {defV : Defaultable V} (a i : addr) (vs : list V) stride,
   wordToNat i < length vs
   -> array a vs stride <=p=>
      array a (firstn (wordToNat i) vs) stride
-     * (a ^+ i ^* stride) |-> sel vs i default
+     * (a ^+ i ^* stride) |-> sel vs i
      * array (a ^+ (i ^+ $1) ^* stride) (skipn (S (wordToNat i)) vs) stride.
 Proof.
   unfold piff; split.
@@ -632,11 +674,11 @@ Proof.
   apply isolate_bwd; auto.
 Qed.
 
-Theorem arrayN_isolate : forall V (default : V) a i vs,
+Theorem arrayN_isolate : forall V {defV : Defaultable V} a i (vs : list V),
   i < length vs
   -> arrayN a vs <=p=>
      arrayN a (firstn i vs)
-     * (a + i) |-> selN vs i default
+     * (a + i) |-> selN vs i
      * arrayN (a + i + 1) (skipn (S i) vs).
 Proof.
   unfold piff; split.
@@ -644,7 +686,7 @@ Proof.
   apply isolateN_bwd; auto.
 Qed.
 
-Theorem array_isolate_upd : forall V (v : V) (a i : addr) vs stride,
+Theorem array_isolate_upd : forall V {defV : Defaultable V} (v : V) (a i : addr) vs stride,
   wordToNat i < length vs
   -> array a (upd vs i v) stride <=p=>
      array a (firstn (wordToNat i) vs) stride
@@ -652,14 +694,14 @@ Theorem array_isolate_upd : forall V (v : V) (a i : addr) vs stride,
      * array (a ^+ (i ^+ $1) ^* stride) (skipn (S (wordToNat i)) vs) stride.
 Proof.
   intros.
-  erewrite array_isolate with (vs:=upd vs i v) (i:=i) (default:=v);
+  rewrite array_isolate with (vs:=upd vs i v) (i:=i) (defV:=defV);
     autorewrite with core; auto.
   unfold piff; split.
   cancel; autorewrite with core; cancel.
   cancel; autorewrite with core; cancel.
 Qed.
 
-Theorem arrayN_isolate_upd : forall V (v : V) a i vs,
+Theorem arrayN_isolate_upd : forall V {defV : Defaultable V} (v : V) a i vs,
   i < length vs
   -> arrayN a (updN vs i v) <=p=>
      arrayN a (firstn i vs)
@@ -667,7 +709,7 @@ Theorem arrayN_isolate_upd : forall V (v : V) a i vs,
      * arrayN (a + i + 1) (skipn (S i) vs).
 Proof.
   intros.
-  erewrite arrayN_isolate with (vs:=updN vs i v) (i:=i) (default:=v);
+  erewrite arrayN_isolate with (vs:=updN vs i v) (i:=i) (defV:=defV);
     autorewrite with core; auto.
   unfold piff; split.
   cancel; autorewrite with core; cancel.
@@ -675,7 +717,7 @@ Proof.
 Qed.
 
 
-Theorem isolate_bwd_upd : forall V (v : V) (a i : addr) vs stride,
+Theorem isolate_bwd_upd : forall V {defV : Defaultable V} (v : V) (a i : addr) vs stride,
   wordToNat i < length vs
   -> array a (firstn (wordToNat i) vs) stride
      * (a ^+ i ^* stride) |-> v
@@ -683,7 +725,7 @@ Theorem isolate_bwd_upd : forall V (v : V) (a i : addr) vs stride,
      =p=> array a (upd vs i v) stride.
 Proof.
   intros.
-  erewrite <- isolate_bwd with (vs:=upd vs i v) (i:=i) (default:=v).
+  erewrite <- isolate_bwd with (vs:=upd vs i v) (i:=i) (defV:=defV).
   cancel.
   autorewrite with core.
   cancel.
@@ -691,7 +733,7 @@ Proof.
   auto.
 Qed.
 
-Theorem isolateN_bwd_upd : forall V (v : V) a i vs,
+Theorem isolateN_bwd_upd : forall V {defV : Defaultable V} (v : V) a i vs,
   i < length vs
   -> arrayN a (firstn i vs)
      * (a + i) |-> v
@@ -699,7 +741,7 @@ Theorem isolateN_bwd_upd : forall V (v : V) a i vs,
      =p=> arrayN a (updN vs i v).
 Proof.
   intros.
-  erewrite <- isolateN_bwd with (vs:=updN vs i v) (i:=i) (default:=v).
+  erewrite <- isolateN_bwd with (vs:=updN vs i v) (i:=i) (defV:=defV).
   cancel.
   autorewrite with core.
   cancel.
@@ -708,24 +750,23 @@ Proof.
 Qed.
 
 
-Theorem array_progupd : forall V l off (v : V) m (default : V),
+Theorem array_progupd : forall V {defV : Defaultable V} l off (v : V) m,
   array $0 l $1 m
   -> wordToNat off < length l
   -> array $0 (updN l (wordToNat off) v) $1 (Prog.upd m off v).
 Proof.
   intros.
-  eapply isolate_bwd with (default:=default).
+  eapply isolate_bwd with (defV:=defV).
   autorewrite with core.
   eassumption.
   eapply pimpl_trans; [| apply pimpl_refl | eapply ptsto_upd ].
   unfold sel; rewrite selN_updN_eq by auto.
   cancel.
   pred_apply.
-  rewrite isolate_fwd with (default:=default) by eassumption.
+  rewrite isolate_fwd with (defV:=defV) by eassumption.
   simpl.
   rewrite firstn_updN by auto.
   rewrite skipn_updN by auto.
-  fold @sep_star.
   cancel.
 Qed.
 
@@ -805,34 +846,34 @@ Proof.
 Qed.
 
 
-Lemma selN_last: forall A l n def (a : A),
-  n = length l -> selN (l ++ a :: nil) n def = a.
+Lemma selN_last: forall A {defA : Defaultable A} l n (a : A),
+  n = length l -> selN (l ++ a :: nil) n = a.
 Proof.
   unfold selN; induction l; destruct n; intros;
   firstorder; inversion H.
 Qed.
 
 
-Lemma selN_firstn: forall {A} (l:list A) i n d,
-  i < n -> selN (firstn n l) i d = selN l i d.
+Lemma selN_firstn: forall {A} {defA : Defaultable A} (l:list A) i n,
+  i < n -> selN (firstn n l) i = selN l i.
 Proof.
   induction l; destruct i, n; intros; try omega; auto.
   apply IHl; omega.
 Qed.
 
 
-Lemma selN_oob: forall A n l (def : A),
+Lemma selN_oob: forall A {defA : Defaultable A} n l,
   length l <= n
-  -> selN l n def = def.
+  -> selN l n = the_default.
 Proof.
   induction n; destruct l; simpl; firstorder.
   inversion H.
 Qed.
 
 
-Lemma selN_app: forall A n l l' (def : A),
+Lemma selN_app: forall A {defA : Defaultable A} n l l',
   n < length l
-  -> selN (l ++ l') n def = selN l n def.
+  -> selN (l ++ l') n = selN l n.
 Proof.
   induction n; destruct l; simpl; firstorder; inversion H.
 Qed.
@@ -879,35 +920,35 @@ Proof.
   rewrite IHl; auto.
 Qed.
 
-Lemma firstn_plusone_selN : forall A n (l : list A) def,
+Lemma firstn_plusone_selN : forall A {defA : Defaultable A} n (l : list A),
   n < length l
-  -> firstn (n + 1) l = firstn n l ++ (selN l n def :: nil).
+  -> firstn (n + 1) l = firstn n l ++ (selN l n :: nil).
 Proof.
   induction n; destruct l; intros; simpl in *; firstorder.
   inversion H.
-  rewrite IHn with (def:=def) by omega; auto.
+  rewrite IHn by omega; auto.
 Qed.
 
-Lemma firstn_updN_oob: forall A (l : list A) n i def,
-  n <= i -> firstn n (updN l i def) = firstn n l.
+Lemma firstn_updN_oob: forall A (l : list A) n i x,
+  n <= i -> firstn n (updN l i x) = firstn n l.
 Proof.
   induction l; destruct n; destruct i; intros; simpl; auto.
   inversion H.
   rewrite IHl by omega; auto.
 Qed.
 
-Lemma firstn_app_updN_eq : forall A l n (x : A),
+Lemma firstn_app_updN_eq : forall A {defA : Defaultable A} l n (x : A),
   n < length l
   -> (firstn n l) ++ x :: nil = firstn (n + 1) (updN l n x).
 Proof.
   intros.
-  rewrite firstn_plusone_selN with (def := x).
+  rewrite firstn_plusone_selN with (defA := defA).
   rewrite selN_updN_eq by auto.
   rewrite firstn_updN_oob; auto.
   rewrite length_updN; auto.
 Qed.
 
-Lemma array_app_progupd : forall V l (v : V) m (b : addr),
+Lemma array_app_progupd : forall V {defV : Defaultable V} l (v : V) m (b : addr),
   length l <= wordToNat b
   -> array $0 l $1 m
   -> array $0 (l ++ v :: nil) $1 (Prog.upd m $ (length l) v)%word.
@@ -916,7 +957,7 @@ Proof.
 
   assert (wordToNat (natToWord addrlen (length l)) = length l).
   erewrite wordToNat_natToWord_bound; eauto.
-  eapply isolate_bwd with (i := $ (length l)) (default := v).
+  eapply isolate_bwd with (i := $ (length l)) (defV := defV).
   rewrite H1; rewrite app_length; simpl; omega.
 
   unfold sel; rewrite H1; rewrite firstn_app; auto.
@@ -931,13 +972,13 @@ Proof.
   erewrite wordToNat_natToWord_bound; eauto.
 Qed.
 
-Lemma arrayN_app_progupd : forall V l (v : V) m,
+Lemma arrayN_app_progupd : forall V {defV : Defaultable V} l (v : V) m,
   arrayN 0 l m
   -> arrayN 0 (l ++ v :: nil) (Prog.upd m (length l) v).
 Proof.
   intros.
 
-  eapply isolateN_bwd with (i := (length l)) (default := v).
+  eapply isolateN_bwd with (i := (length l)) (defV := defV).
   rewrite app_length; simpl; omega.
 
   rewrite firstn_app; auto.
@@ -987,18 +1028,18 @@ Qed.
 (** * Operations for array accesses, to guide automation *)
 
 Definition ArrayRead T a i stride rx : prog T :=
-  Xform (isolate_fwd (V:=valuset) ($0, nil)) isolate_bwd
+  Xform (isolate_fwd (V:=valuset)) isolate_bwd
     (v <- Read (a ^+ i ^* stride);
      Xform isolate_bwd pimpl_refl (rx v)).
 
 Definition ArrayWrite T a i stride v rx : prog T :=
-  Xform (isolate_fwd (V:=valuset) ($0, nil)) isolate_bwd
+  Xform (isolate_fwd (V:=valuset)) isolate_bwd
     (v <- Write (a ^+ i ^* stride) v;
      Xform isolate_bwd_upd pimpl_refl (rx v)).
 
 
 Definition ArraySync T a i stride rx : prog T :=
-  Xform (isolate_fwd (V:=valuset) ($0, nil)) isolate_bwd
+  Xform (isolate_fwd (V:=valuset)) isolate_bwd
     (v <- Sync (a ^+ i ^* stride);
      Xform isolate_bwd_upd pimpl_refl (rx v)).
 
@@ -1011,7 +1052,7 @@ Theorem read_ok:
   {{ fun done crash => exists vs F, array a vs stride * F
    * [[wordToNat i < length vs]]
    * [[{{ fun done' crash' => array a vs stride * F * [[ done' = done ]] * [[ crash' = crash ]]
-       }} rx (fst (sel vs i ($0, nil)))]]
+       }} rx (fst (sel vs i))]]
    * [[array a vs stride * F =p=> crash]]
   }} ArrayRead a i stride rx.
 Proof.
@@ -1035,13 +1076,14 @@ Theorem write_ok:
 Proof.
   unfold ArrayWrite.
   hoare.
+  apply valuset_def.
 Qed.
 
 Theorem sync_ok:
   forall T (a i stride:addr) (rx:unit->prog T),
   {{ fun done crash => exists vs F, array a vs stride * F
    * [[wordToNat i < length vs]]
-   * [[{{ fun done' crash' => array a (upd_sync vs i ($0, nil)) stride * F
+   * [[{{ fun done' crash' => array a (upd_sync vs i) stride * F
         * [[ done' = done ]] * [[ crash' = crash ]]
        }} rx tt]]
    * [[ array a vs stride * F =p=> crash ]]
@@ -1050,8 +1092,9 @@ Proof.
   unfold ArraySync.
   hoare.
 
-  fold (@sep_star (valu * list valu)); rewrite <- surjective_pairing; cancel.
-  fold (@sep_star (valu * list valu)); rewrite <- surjective_pairing; cancel.
+  rewrite <- surjective_pairing; cancel.
+  apply valuset_def.
+  rewrite <- surjective_pairing; cancel.
 Qed.
 
 Hint Extern 1 ({{_}} progseq (ArrayRead _ _ _) _) => apply read_ok : prog.
@@ -1097,12 +1140,12 @@ Theorem swap_ok : forall T a i j (rx : prog T),
   {{ fun done crash => exists vs F, array a vs $1 * F
      * [[wordToNat i < length vs]]
      * [[wordToNat j < length vs]]
-     * [[{{fun done' crash' => array a (upd_prepend (upd_prepend vs i (fst (sel vs j ($0, nil)))) j (fst (sel vs i ($0, nil)))) $1 * F
+     * [[{{fun done' crash' => array a (upd_prepend (upd_prepend vs i (fst (sel vs j))) j (fst (sel vs i))) $1 * F
            * [[ done' = done ]] * [[ crash' = crash ]]
          }} rx ]]
      * [[ array a vs $1 * F \/
-          array a (upd_prepend vs i (fst (sel vs j ($0, nil)))) $1 * F \/
-          array a (upd_prepend (upd_prepend vs i (fst (sel vs j ($0, nil)))) j (fst (sel vs i ($0, nil)))) $1 * F =p=> crash ]]
+          array a (upd_prepend vs i (fst (sel vs j))) $1 * F \/
+          array a (upd_prepend (upd_prepend vs i (fst (sel vs j))) j (fst (sel vs i))) $1 * F =p=> crash ]]
   }} swap a i j rx.
 Proof.
   unfold swap; hoare_unfold unfold_prepend.
@@ -1116,9 +1159,10 @@ Proof.
   rewrite IHi; auto.
 Qed.
 
-Lemma selN_combine : forall Ta Tb i a b (a0:Ta) (b0:Tb),
+Lemma selN_combine : forall Ta Tb {defTa : Defaultable Ta} {defTb : Defaultable Tb}
+  i (a : list Ta) (b : list Tb),
   length a = length b
-  -> selN (List.combine a b) i (a0, b0) = pair (selN a i a0) (selN b i b0).
+  -> selN (List.combine a b) i = pair (selN a i) (selN b i).
 Proof.
   induction i; destruct a, b; intros; inversion H; auto.
   simpl; apply IHi; assumption.
@@ -1223,9 +1267,9 @@ Proof.
 Qed.
 
 
-Lemma selN_removelast : forall A n l (def : A),
+Lemma selN_removelast : forall A {defA : Defaultable A} n l,
   n < length l - 1
-  -> selN (removelast l) n def = selN l n def.
+  -> selN (removelast l) n = selN l n.
 Proof.
   induction l using rev_ind; destruct n;
   intros; simpl; intuition;
@@ -1273,7 +1317,7 @@ Proof.
 Qed.
 
 
-Lemma isolate_last: forall A l (a : A) (b:addr),
+Lemma isolate_last: forall A {defA : Defaultable A} l (a : A) (b:addr),
   length l <= wordToNat b ->
   (array $0 (l ++ a :: nil) $1 <=p=>
    array $0 l $1 * $ (length l) |-> a)%pred.
@@ -1282,7 +1326,7 @@ Proof.
   assert (wordToNat (natToWord addrlen (length l)) = length l) as Heq by
     (eapply wordToNat_natToWord_bound; eauto).
 
-  rewrite array_isolate with (i := $ (length l)) (default := a) by
+  rewrite array_isolate with (i := $ (length l)) (defV := defA) by
     (rewrite app_length; unfold length at 3; omega ).
   unfold sel; rewrite selN_last by omega.
   ring_simplify ((natToWord addrlen 0) ^+ $ (length l) ^* $ (1)).
