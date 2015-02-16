@@ -235,10 +235,10 @@ Module MEMLOG.
    * (i.e., use [ptsto_synced]).
    *)
   Definition nil_unless_in (ms: list addr) (l: list (list valu)) :=
-    forall a, ~ In a ms -> sel l a nil = nil.
+    forall a, ~ In a ms -> sel l a = nil.
 
-  Definition equal_unless_in T (ms: list addr) (m1: list T) (m2: list T) (def: T) :=
-    forall a, ~ In a ms -> sel m1 a def = sel m2 a def.
+  Definition equal_unless_in T {defT : Defaultable T} (ms: list addr) (m1: list T) (m2: list T) :=
+    forall a, ~ In a ms -> sel m1 a = sel m2 a.
 
   Definition rep xp (st: logstate) (ms: memstate) :=
     (* For now, support just one descriptor block, at the start of the log. *)
@@ -287,7 +287,7 @@ Module MEMLOG.
       (LogCommit xp) |=> $1
     * exists old d, data_rep xp d
       (* If something's in the transaction, it doesn't matter what state it's in on disk *)
-    * [[ equal_unless_in (map fst (Map.elements ms)) (synced_list old) d ($0, nil) ]]
+    * [[ equal_unless_in (map fst (Map.elements ms)) (synced_list old) d ]]
     * log_rep xp old ms
     * cur_rep old ms cur
 
@@ -438,14 +438,14 @@ Module MEMLOG.
       rx v
     end.
 
-  Lemma replay_sel : forall a v ms m def,
-    indomain' a m -> Map.MapsTo a v ms -> sel (replay ms m) a def = v.
+  Lemma replay_sel : forall a v ms m,
+    indomain' a m -> Map.MapsTo a v ms -> sel (replay ms m) a = v.
   Proof.
     admit.
   Qed.
 
-  Lemma replay_sel_other : forall a ms m def,
-    ~ Map.In a ms -> selN (replay ms m) (wordToNat a) def = selN m (wordToNat a) def.
+  Lemma replay_sel_other : forall a ms m,
+    ~ Map.In a ms -> selN (replay ms m) (wordToNat a) = selN m (wordToNat a).
   Proof.
     admit.
   Qed.
@@ -465,7 +465,7 @@ Module MEMLOG.
     case_eq (Map.find a ms); hoare.
     subst.
 
-    eapply list2mem_sel with (def := $0) in H1.
+    eapply list2mem_sel in H1.
     apply Map.find_2 in H.
     eapply replay_sel in H.
     rewrite <- H.
@@ -480,7 +480,7 @@ Module MEMLOG.
     rewrite repeat_length; auto.
     unfold sel; rewrite selN_combine.
     simpl.
-    eapply list2mem_sel with (def := $0) in H1.
+    eapply list2mem_sel in H1.
     rewrite H1.
     unfold sel.
     rewrite replay_sel_other. trivial.
@@ -515,7 +515,7 @@ Module MEMLOG.
         * avail_region (LogData xp ^+ i) (# (LogLen xp) - # i)
       OnCrash crash
       Begin
-        Write (LogData xp ^+ i) (sel (map snd (Map.elements ms)) i $0);;
+        Write (LogData xp ^+ i) (sel (map snd (Map.elements ms)) i);;
         lrx tt
       Rof;;
       (* ... and sync *)
@@ -698,8 +698,8 @@ Module MEMLOG.
     cancel.
     step.
     array_match.
-    rewrite firstn_plusone_selN with (def := ($0, nil)).
-    instantiate (a2 := l2 ++ [valuset_list (sel l3 $0 ($0, nil))]).
+    rewrite firstn_plusone_selN with (defA := pair_def).
+    instantiate (a2 := l2 ++ [valuset_list (sel l3 $0)]).
     instantiate (a3 := skipn 1 l3).
     admit. (* list manipulation *)
     solve_lengths.
@@ -771,8 +771,8 @@ Module MEMLOG.
     word2nat_clear.
     destruct l6; simpl in *; abstract word2nat_auto.
     auto.
-
-Admitted. (* XXX solve cancellation problem *)
+    (* XXX solve cancellation problem *)
+  Qed.
 
 (*
     cancel.
@@ -845,12 +845,12 @@ Admitted. (* XXX solve cancellation problem *)
       * log_rep xp cur ms
       * exists d, data_rep xp d
       * [[ replay' (skipn (wordToNat i) (Map.elements ms)) (map fst d) = cur ]]
-      * [[ equal_unless_in (skipn (wordToNat i) (map fst (Map.elements ms))) cur (map fst d) $0 ]]
+      * [[ equal_unless_in (skipn (wordToNat i) (map fst (Map.elements ms))) cur (map fst d) ]]
       * [[ nil_unless_in (map fst (Map.elements ms)) (map snd d) ]]
     OnCrash
       rep xp (CommittedTxn cur) ms
     Begin
-      ArrayWrite $0 (sel (map fst (Map.elements ms)) i $0) $1 (sel (map snd (Map.elements ms)) i $0);;
+      ArrayWrite $0 (sel (map fst (Map.elements ms)) i) $1 (sel (map snd (Map.elements ms)) i);;
       lrx tt
     Rof;;
     rx tt.
@@ -895,7 +895,7 @@ Admitted. (* XXX solve cancellation problem *)
     OnCrash
       rep xp (AppliedUnsyncTxn cur) ms
     Begin
-      ArraySync $0 (sel (map fst (Map.elements ms)) i $0) $1;;
+      ArraySync $0 (sel (map fst (Map.elements ms)) i) $1;;
       lrx tt
     Rof;;
     Write (LogCommit xp) $0;;
@@ -917,14 +917,13 @@ Admitted. (* XXX solve cancellation problem *)
     admit.
     admit.
     rewrite skipn_oob in H22 by solve_lengths.
-    instantiate (y := $0).
     admit.
     apply pimpl_or_r; left; cancel.
     admit.
     admit.
     apply pimpl_or_r; left; cancel.
     admit.
- Qed.
+  Qed.
 
   Hint Extern 1 ({{_}} progseq (apply_sync _ _) _) => apply apply_sync_ok : prog.
 
@@ -984,6 +983,9 @@ Admitted. (* XXX solve cancellation problem *)
 
   Definition hidden_array := @array valuset.
 
+  Ltac or_r := apply pimpl_or_r; right.
+  Ltac or_l := apply pimpl_or_r; left.
+
   Theorem commit_ok: forall xp ms,
     {< m1 m2,
      PRE    rep xp (ActiveTxn m1 m2) ms
@@ -995,8 +997,6 @@ Admitted. (* XXX solve cancellation problem *)
     unfold commit, would_recover_either, log_intact.
     hoare_unfold log_unfold.
     unfold equal_unless_in; intuition; auto.
-    Ltac or_r := apply pimpl_or_r; right.
-    Ltac or_l := apply pimpl_or_r; left.
     or_r; or_l; cancel.
     or_r; or_r; or_l; cancel.
     (* true by H17, H12 *) admit.
@@ -1032,13 +1032,13 @@ Admitted. (* XXX solve cancellation problem *)
       * cur_rep old log_on_disk cur
       * log_rep xp old log_on_disk
         (* If something's in the transaction, it doesn't matter what state it's in on disk *)
-      * [[ equal_unless_in (map fst (Map.elements log_on_disk)) (synced_list old) d ($0, nil) ]]
+      * [[ equal_unless_in (map fst (Map.elements log_on_disk)) (synced_list old) d ]]
       * [[ log_prefix = firstn (wordToNat i) (Map.elements log_on_disk) ]]
     OnCrash
       rep xp (CommittedTxn cur) log_on_disk
     Begin
       v <- ArrayRead (LogData xp) i $1;
-      lrx (log_prefix ++ [(sel desc i $0, v)])
+      lrx (log_prefix ++ [(sel desc i, v)])
     Rof;
     rx (MapProperties.of_list log).
 
@@ -1098,9 +1098,6 @@ Admitted. (* XXX solve cancellation problem *)
     match goal with [ H: $ _ = $ _ |- _ ] => solve [
       apply natToWord_discriminate in H; [ contradiction | rewrite valulen_is; apply leb_complete; compute; trivial]
     ] end.
-
-  Ltac or_r := apply pimpl_or_r; right.
-  Ltac or_l := apply pimpl_or_r; left.
 
   Theorem recover_ok: forall xp,
     {< m1 m2,
@@ -1216,7 +1213,7 @@ Admitted. (* XXX solve cancellation problem *)
       cancel.
       - step; step; try word_discriminate.
 
-  Admitted.
+  Qed.
 
   Hint Extern 1 ({{_}} progseq (recover _) _) => apply recover_ok : prog.
 
@@ -1231,7 +1228,7 @@ Admitted. (* XXX solve cancellation problem *)
     PRE    rep xp (ActiveTxn mbase m) ms *
            [[ exists F', (array a vs stride * F')%pred (list2mem m) ]] *
            [[ wordToNat i < length vs ]]
-    POST:r [[ r = sel vs i $0 ]] * rep xp (ActiveTxn mbase m) ms
+    POST:r [[ r = sel vs i ]] * rep xp (ActiveTxn mbase m) ms
     CRASH  rep xp (ActiveTxn mbase m) ms
     >} read_array xp a i stride ms.
   Proof.
@@ -1239,12 +1236,12 @@ Admitted. (* XXX solve cancellation problem *)
     apply pimpl_ok2 with (fun done crash => exists F mbase m vs, rep xp (ActiveTxn mbase m) ms * F
      * [[ exists F',
           (array a (firstn (wordToNat i) vs) stride
-           * (a ^+ i ^* stride) |-> sel vs i $0
+           * (a ^+ i ^* stride) |-> sel vs i
            * array (a ^+ (i ^+ $1) ^* stride) (skipn (S (wordToNat i)) vs) stride * F')%pred (list2mem m) ]]
      * [[ wordToNat i < length vs ]]
      * [[ {{ fun done' crash' => rep xp (ActiveTxn mbase m) ms * F
            * [[ done' = done ]] * [[ crash' = crash ]]
-          }} rx (sel vs i $0) ]]
+          }} rx (sel vs i) ]]
      * [[ rep xp (ActiveTxn mbase m) ms * F =p=> crash ]])%pred.
     unfold read_array.
     eapply pimpl_ok2.
@@ -1278,7 +1275,7 @@ Admitted. (* XXX solve cancellation problem *)
     apply pimpl_ok2 with (fun done crash => exists F mbase m vs F',
        rep xp (ActiveTxn mbase m) ms * F
      * [[ (array a (firstn (wordToNat i) vs) stride
-           * (a ^+ i ^* stride) |-> sel vs i $0
+           * (a ^+ i ^* stride) |-> sel vs i
            * array (a ^+ (i ^+ $1) ^* stride) (skipn (S (wordToNat i)) vs) stride * F')%pred (list2mem m) ]]
      * [[ wordToNat i < length vs ]]
      * [[ forall ms',
@@ -1313,7 +1310,6 @@ Admitted. (* XXX solve cancellation problem *)
 
     eauto.
 
-    instantiate (default:=$0).
     step.
     step.
   Qed.

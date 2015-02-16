@@ -27,7 +27,7 @@ Set Implicit Arguments.
  * inode number is too big).  For now, this always uses [addr] as the index.
  *)
 Definition list2mem (A: Type) (l: list A) : @mem addr (@weq addrlen) A :=
-  fun a => sel (map (@Some A) l) a None.
+  fun a => if (lt_dec #a (length l)) then sel (map (@Some A) l) a else None.
 
 Theorem list2mem_ptsto_bounds: forall A F (l: list A) i x,
   (F * i |-> x)%pred (list2mem l) -> wordToNat i < length l.
@@ -36,8 +36,7 @@ Proof.
   unfold list2mem in H.
   apply ptsto_valid' in H.
   destruct (lt_dec (wordToNat i) (length l)); auto.
-  unfold sel in H. rewrite nth_selN_eq in H.
-  rewrite nth_overflow in H by (rewrite map_length; omega); discriminate.
+  congruence.
 Qed.
 
 
@@ -46,8 +45,8 @@ Theorem list2mem_oob : forall A (l : list A) i,
   -> (list2mem l) i = None.
 Proof.
   unfold list2mem; intros.
-  unfold sel; rewrite selN_oob; auto.
-  rewrite map_length; auto.
+  destruct (lt_dec (wordToNat i) (length l)); auto.
+  omega.
 Qed.
 
 
@@ -65,9 +64,9 @@ Proof.
 Qed.
 
 
-Theorem list2mem_sel: forall A F (l: list A) i x def,
+Theorem list2mem_sel: forall A {defA : Defaultable A} F (l: list A) i x,
   (F * i |-> x)%pred (list2mem l)
-  -> x = sel l i def.
+  -> x = sel l i.
 Proof.
   intros.
   assert (wordToNat i < length l).
@@ -75,6 +74,7 @@ Proof.
   unfold list2mem in H.
   apply ptsto_valid' in H.
   erewrite sel_map in H by auto.
+  destruct (lt_dec (wordToNat i) (length l)); try omega.
   inversion H; eauto.
 Qed.
 
@@ -89,7 +89,8 @@ Proof.
   autorewrite with core.
 
   destruct (weq x i).
-  subst; erewrite selN_updN_eq; auto.
+  subst; destruct (lt_dec #i (length l)); try omega.
+  rewrite selN_updN_eq; auto.
   rewrite map_length; auto.
   erewrite selN_updN_ne; auto.
   word2nat_simpl; omega.
@@ -108,7 +109,7 @@ Proof.
 Qed.
 
 
-Theorem listapp_progupd: forall A l (a : A) (b : addr),
+Theorem listapp_progupd: forall A {defA : Defaultable A} l (a : A) (b : addr),
   length l <= wordToNat b
   -> list2mem (l ++ a :: nil) = Prog.upd (list2mem l) $ (length l) a.
 Proof.
@@ -119,24 +120,32 @@ Proof.
   destruct (wlt_dec x $ (length l)).
   - apply wlt_lt in w.
     erewrite wordToNat_natToWord_bound in w; eauto.
-    subst; rewrite selN_map with (default' := a).
+    subst; rewrite selN_map with (defT' := defA).
     destruct (weq x $ (length l)); subst.
-    + erewrite wordToNat_natToWord_bound in *; eauto.
-      rewrite selN_last; auto.
-    + rewrite selN_map with (default' := a); auto.
+    + erewrite wordToNat_natToWord_bound in *; eauto. omega.
+    + rewrite selN_map with (defT' := defA); auto.
       rewrite selN_app; auto.
+      destruct (lt_dec #x (length l)); try omega.
+      destruct (lt_dec #x (length (l ++ a::nil))); auto.
+      rewrite app_length in *; omega.
     + rewrite app_length; simpl; omega.
   - destruct (weq x $ (length l)).
-    + subst; erewrite selN_map with (default' := a).
+    + subst; erewrite selN_map with (defT' := defA).
       rewrite selN_last; auto.
+      destruct (lt_dec # ($ (length l)) (length (l ++ a :: nil))); auto.
+      rewrite app_length in *; simpl in *.
+      erewrite wordToNat_natToWord_bound in n0 by eauto. omega.
       eapply wordToNat_natToWord_bound; eauto.
       erewrite wordToNat_natToWord_bound; eauto.
       rewrite app_length; simpl; omega.
     + apply wle_le in n.
       erewrite wordToNat_natToWord_bound in n; eauto.
-      repeat erewrite selN_oob with (def := None); try rewrite map_length; auto.
+      rewrite app_length; simpl.
+      repeat erewrite selN_oob; try rewrite map_length; auto.
+      destruct (lt_dec #x (length l)); try omega.
+      destruct (lt_dec #x (length l + 1)); auto.
       rewrite app_length; simpl; intuition.
-      rewrite Nat.add_1_r; apply lt_le_S.
+      rewrite Nat.add_1_r. apply lt_le_S.
       apply le_lt_or_eq in n; intuition.
       contradict n0; rewrite H0.
       apply wordToNat_inj.
@@ -144,7 +153,8 @@ Proof.
 Qed.
 
 
-Theorem list2mem_app: forall A (F : @pred addr (@weq addrlen) A) l a (b : addr),
+Theorem list2mem_app: forall A {defA : Defaultable A}
+  (F : @pred addr (@weq addrlen) A) l a (b : addr),
   length l <= wordToNat b
   -> F (list2mem l)
   -> (F * $ (length l) |-> a)%pred (list2mem (l ++ a :: nil)).
@@ -153,25 +163,28 @@ Proof.
   erewrite listapp_progupd; eauto.
   apply ptsto_upd_disjoint; auto.
   unfold list2mem, sel.
-  rewrite selN_oob; auto.
-  rewrite map_length.
   erewrite wordToNat_natToWord_bound; eauto.
+  destruct (lt_dec (length l) (length l)); try omega; auto.
 Qed.
 
 
-Theorem list2mem_removelast_is : forall A l (def : A) (b : addr),
+Theorem list2mem_removelast_is : forall A {defA : Defaultable A} (l : list A) (b : addr),
   l <> nil -> length l <= wordToNat b
   -> list2mem (removelast l) =
-     fun i => if (wlt_dec i $ (length l - 1)) then Some (sel l i def) else None.
+     fun i => if (wlt_dec i $ (length l - 1)) then Some (sel l i) else None.
 Proof.
   intros; apply functional_extensionality; intros.
   destruct (wlt_dec x $ (length l - 1)); unfold list2mem, sel.
   - assert (wordToNat x < length l - 1); apply wlt_lt in w.
     erewrite wordToNat_natToWord_bound with (bound:=b) in w by omega; auto.
-    rewrite selN_map with (default' := def).
+    rewrite length_removelast by auto.
+    rewrite selN_map with (defT' := defA).
     rewrite selN_removelast by omega; auto.
+    destruct (lt_dec #x (length l - 1)); try omega; auto.
     rewrite length_removelast by auto; omega.
-  - rewrite selN_oob; auto.
+  - rewrite length_removelast by auto.
+    rewrite selN_oob; auto.
+    destruct (lt_dec #x (length l - 1)); auto.
     rewrite map_length.
     rewrite length_removelast by auto.
     apply wle_le in n.
@@ -179,25 +192,25 @@ Proof.
 Qed.
 
 
-Theorem list2mem_removelast_list2mem : forall A (l : list A) (b : addr),
+Theorem list2mem_removelast_list2mem : forall A {defA : Defaultable A} (l : list A) (b : addr),
   l <> nil -> length l <= wordToNat b
   -> list2mem (removelast l) =
      fun i => if (weq i $ (length l - 1)) then None else (list2mem l) i.
 Proof.
   intros; apply functional_extensionality; intros.
-  assert (exists def, firstn 1 l = def :: nil) as Hdef.
-  destruct l; try congruence.
-  exists a; eauto.
-  destruct Hdef as [def _].
 
-  erewrite list2mem_removelast_is with (def := def) by eauto.
+  erewrite list2mem_removelast_is by eauto.
   unfold list2mem, sel.
   destruct (wlt_dec x $ (length l - 1));
   destruct (weq x $ (length l - 1)); subst; intuition.
   apply wlt_lt in w; omega.
-  erewrite selN_map with (default' := def); auto.
+  erewrite selN_map; auto.
+  destruct (lt_dec #x (length l)); auto.
+  contradict n0. apply wlt_lt in w.
+  erewrite wordToNat_natToWord_bound with (bound:=b) in w by omega. omega.
   apply wlt_lt in w; rewrite wordToNat_natToWord_bound with (bound:=b) in w by omega; omega.
   erewrite selN_oob; auto.
+  destruct (lt_dec #x (length l)); auto.
   rewrite map_length.
   assert ($ (length l - 1) < x)%word.
   destruct (weq $ (length l - 1) x); intuition.
@@ -205,7 +218,7 @@ Proof.
 Qed.
 
 
-Theorem list2mem_removelast: forall A F (l : list A) v (b : addr),
+Theorem list2mem_removelast: forall A {defA : Defaultable A} F (l : list A) v (b : addr),
   l <> nil -> length l <= wordToNat b
   -> (F * $ (length l - 1) |-> v)%pred (list2mem l)
   -> F (list2mem (removelast l)).
@@ -225,28 +238,31 @@ Proof.
 Qed.
 
 
-Theorem list2mem_array: forall  A (l : list A) (b : addr),
+Theorem list2mem_array: forall A {defA : Defaultable A} (l : list A) (b : addr),
   length l <= wordToNat b
   -> array $0 l $1 (list2mem l).
 Proof.
-  induction l using rev_ind; intros; firstorder; simpl.
+  induction l using rev_ind; simpl; intros.
+  firstorder.
   rewrite app_length in H; simpl in H.
-  erewrite listapp_progupd with (b := b); try omega.
-  eapply array_app_progupd with (b := b); try omega.
-  apply IHl with (b := b); omega.
+  rewrite listapp_progupd with (b := b); try omega; eauto.
+  apply array_app_progupd with (b := b); try omega; eauto.
+  apply IHl with (b:=b); omega.
 Qed.
 
 
 (* Alternative variants of [list2mem] that are more induction-friendly *)
 Definition list2mem_off (A: Type) (start : nat) (l: list A) : (addr -> option A) :=
-  fun a => if lt_dec (wordToNat a) start then None
-                                         else selN (map (@Some A) l) (wordToNat a - start) None.
+  fun a => if lt_dec (wordToNat a) start then None else
+           if lt_dec (wordToNat a - start) (length l)
+           then selN (map (@Some A) l) (wordToNat a - start) else None.
 
 Theorem list2mem_off_eq : forall A (l : list A), list2mem l = list2mem_off 0 l.
 Proof.
   unfold list2mem, list2mem_off, sel; intros.
   apply functional_extensionality; intros.
   rewrite <- minus_n_O.
+  destruct (lt_dec #x 0); try omega.
   reflexivity.
 Qed.
 
@@ -287,7 +303,9 @@ Proof.
   unfold list2mem_off.
 
   destruct (lt_dec (wordToNat x) (S n)); [omega |].
-  f_equal; omega.
+  replace (#x - S n) with (n2) by omega.
+  destruct (lt_dec n2 (length l));
+  destruct (lt_dec (S n2) (S (length l))); try omega; reflexivity.
 Qed.
 
 Theorem list2mem_fix_eq : forall A (l : list A) (b : addr),
@@ -381,7 +399,7 @@ Proof.
 Qed.
 
 
-Theorem list2mem_array_app_eq: forall A V (F : @pred addr (@weq addrlen) V) (l l' : list A) a (b : addr),
+Theorem list2mem_array_app_eq: forall A V {defA : Defaultable A} (F : @pred addr (@weq addrlen) V) (l l' : list A) a (b : addr),
   length l < wordToNat b
   -> length l' <= wordToNat b
   -> (array $0 l $1 * $ (length l) |-> a)%pred (list2mem l')
@@ -399,9 +417,10 @@ Proof.
   rewrite firstn_app by auto.
   replace (S (length l)) with (length (l ++ a :: nil)) by (rewrite app_length; simpl; omega).
   rewrite skipn_oob by omega; simpl.
-  instantiate (y:=a).
   rewrite selN_last by auto.
   cancel.
+  Grab Existential Variables.
+  eauto.
 Qed.
 
 
@@ -410,19 +429,19 @@ Definition array_ex A (vs : list A) i :=
     array (i ^+ $1) (skipn (S (wordToNat i)) vs) $1)%pred.
 
 
-Theorem array_except : forall V vs (def : V) (i : addr),
+Theorem array_except : forall V {defV : Defaultable V} vs (i : addr),
   wordToNat i < length vs
-  -> array $0 vs $1 <=p=> (array_ex vs i) * (i |-> sel vs i def).
+  -> array $0 vs $1 <=p=> (array_ex vs i) * (i |-> sel vs i).
 Proof.
   intros; unfold array_ex.
-  erewrite array_isolate with (default := def); eauto.
+  erewrite array_isolate; eauto.
   ring_simplify ($ (0) ^+ i ^* $ (1)).
   ring_simplify ($ (0) ^+ (i ^+ $ (1)) ^* $ (1)).
   unfold piff; split; cancel.
 Qed.
 
 
-Theorem array_except_upd : forall V vs (v : V) (i : addr),
+Theorem array_except_upd : forall V {defV : Defaultable V} vs (v : V) (i : addr),
   wordToNat i < length vs
   -> array $0 (upd vs i v) $1 <=p=> (array_ex vs i) * (i |-> v).
 Proof.
@@ -434,17 +453,17 @@ Proof.
 Qed.
 
 
-Theorem list2mem_array_pick : forall V l (def : V) (i b : addr),
+Theorem list2mem_array_pick : forall V {defV : Defaultable V} l (i b : addr),
   length l <= wordToNat b
   -> wordToNat i < length l
-  -> (array_ex l i * i |-> sel l i def)%pred (list2mem l).
+  -> (array_ex l i * i |-> sel l i)%pred (list2mem l).
 Proof.
   intros.
   eapply array_except; eauto.
   eapply list2mem_array; eauto.
 Qed.
 
-Theorem list2mem_array_upd : forall V ol nl (v : V) (i b : addr),
+Theorem list2mem_array_upd : forall V {defV : Defaultable V} ol nl (v : V) (i b : addr),
   (array_ex ol i * i |-> v)%pred (list2mem nl)
   -> length ol <= wordToNat b
   -> length nl <= wordToNat b
@@ -457,7 +476,7 @@ Proof.
   rewrite array_except_upd; auto.
 Qed.
 
-Theorem list2mem_array_updN : forall V ol nl (v : V) (i b : addr),
+Theorem list2mem_array_updN : forall V {defV : Defaultable V} ol nl (v : V) (i b : addr),
   (array_ex ol i * i |-> v)%pred (list2mem nl)
   -> length ol <= wordToNat b
   -> length nl <= wordToNat b
@@ -494,8 +513,8 @@ Proof.
 Qed.
 
 
-Theorem list2mem_array_exis : forall V l (def : V) i,
-  (array_ex l i * i |-> sel l i def)%pred (list2mem l)
+Theorem list2mem_array_exis : forall V {defV : Defaultable V} (l : list V) i,
+  (array_ex l i * i |-> sel l i)%pred (list2mem l)
   -> (array_ex l i * i |->?)%pred (list2mem l).
 Proof.
   intros; pred_apply; cancel.
@@ -511,7 +530,6 @@ Ltac rewrite_list2mem_pred_bound H :=
 Ltac rewrite_list2mem_pred_sel H :=
   let Hx := fresh in
   eapply list2mem_sel in H as Hx;
-  try autorewrite with defaults in Hx;
   unfold sel in Hx.
 
 Ltac rewrite_list2mem_pred_upd H:=
@@ -538,8 +556,7 @@ Ltac list2mem_ptsto_cancel :=
     let Hx := fresh in
     assert (array $0 l $1 (list2mem l)) as Hx;
       [ eapply list2mem_array; eauto; try omega |
-        pred_apply; erewrite array_except; unfold sel; clear Hx;
-        try autorewrite with defaults; eauto ]
+        pred_apply; erewrite array_except; unfold sel; clear Hx; eauto ]
   end.
 
 Ltac destruct_listmatch :=

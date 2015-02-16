@@ -48,6 +48,16 @@ Module Rec.
         end%type) rt
     end.
 
+  Instance data_def {ft} : Defaultable (data ft).
+    einduction ft using type_rect_nest.
+    apply word_def.
+    apply list_def.
+    apply IHt.
+    apply unit_def.
+    simpl in *.
+    eapply pair_def.
+  Defined.
+
   Definition recdata ft := data (RecF ft).
 
   Fixpoint len (t : type) : nat :=
@@ -340,8 +350,8 @@ Module Rec.
     apply l0.
   Defined.
 
-  Theorem word_selN_equiv : forall ft l idx w def, idx < l ->
-    of_word (@word_selN ft l idx w) = selN (of_word w) idx def.
+  Theorem word_selN_equiv : forall ft l idx w, idx < l ->
+    of_word (@word_selN ft l idx w) = selN (of_word w) idx.
   Proof.
     induction l; intros; try omega.
     unfold of_word in *; fold (@of_word ft) in *.

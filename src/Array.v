@@ -24,10 +24,6 @@ Class Defaultable (T : Type) := {
   the_default : T
 }.
 
-Instance valu_def : Defaultable valu := {
-  the_default := $0
-}.
-
 Instance word_def {len} : Defaultable (word len) := {
   the_default := $0
 }.
@@ -40,12 +36,16 @@ Instance list_def {T} : Defaultable (list T) := {
   the_default := nil
 }.
 
-Instance pair_def {A B} {defA : Defaultable A} {defB : Defaultable B} : Defaultable (A * B) := {
-  the_default := (the_default, the_default)
+Instance unit_def : Defaultable unit := {
+  the_default := tt
 }.
 
-Instance valuset_def : Defaultable valuset := {
-  the_default := ($0, nil)
+Instance option_def {T} : Defaultable (option T) := {
+  the_default := None
+}.
+
+Instance pair_def {A B} {defA : Defaultable A} {defB : Defaultable B} : Defaultable (A * B) := {
+  the_default := (the_default, the_default)
 }.
 
 Fixpoint selN (V : Type) {defV : Defaultable V} (vs : list V) (n : nat) : V :=
@@ -80,9 +80,9 @@ Definition upd_prepend (vs : list valuset) (i : addr) (v : valu) : list valuset 
 Definition upd_sync (vs : list valuset) (i : addr) : list valuset :=
   upd vs i (fst (sel vs i), nil).
 
-Notation "l [ i ]" := (selN l i _) (at level 56, left associativity).
+Notation "l [ i ]" := (selN l i) (at level 56, left associativity).
 Notation "l [ i := v ]" := (updN l i v) (at level 76, left associativity).
-Notation "l $[ i ]" := (sel l i _) (at level 56, left associativity).
+Notation "l $[ i ]" := (sel l i) (at level 56, left associativity).
 Notation "l $[ i := v ]" := (upd l i v) (at level 76, left associativity).
 
 
@@ -1076,7 +1076,7 @@ Theorem write_ok:
 Proof.
   unfold ArrayWrite.
   hoare.
-  apply valuset_def.
+  apply pair_def.
 Qed.
 
 Theorem sync_ok:
@@ -1093,7 +1093,7 @@ Proof.
   hoare.
 
   rewrite <- surjective_pairing; cancel.
-  apply valuset_def.
+  apply pair_def.
   rewrite <- surjective_pairing; cancel.
 Qed.
 

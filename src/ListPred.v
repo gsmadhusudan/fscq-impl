@@ -14,6 +14,7 @@ Section LISTPRED.
   Variable AEQ : DecEq AT.
   Variable V : Type.
   Variable prd : T -> @pred AT AEQ V.
+  Variable defT : Defaultable T.
 
   Fixpoint listpred (ts : list T) :=
     match ts with
@@ -27,18 +28,18 @@ Section LISTPRED.
     unfold listpred; intros; auto.
   Qed.
 
-  Theorem listpred_fwd : forall l i def, 
+  Theorem listpred_fwd : forall l i, 
     i < length l ->
-      listpred l =p=> listpred (firstn i l) * (prd (selN l i def)) * listpred (skipn (S i) l).
+      listpred l =p=> listpred (firstn i l) * (prd (selN l i)) * listpred (skipn (S i) l).
   Proof.
     induction l; simpl; intros; [omega |].
     destruct i; simpl; cancel.
     apply IHl; omega.
   Qed.
 
-  Theorem listpred_bwd : forall l i def, 
+  Theorem listpred_bwd : forall l i, 
     i < length l ->
-      listpred (firstn i l) * (prd (selN l i def)) * listpred (skipn (S i) l) =p=> listpred l.
+      listpred (firstn i l) * (prd (selN l i)) * listpred (skipn (S i) l) =p=> listpred l.
   Proof.
     induction l; simpl; intros; [omega |].
     destruct i; [cancel | simpl].
@@ -49,11 +50,11 @@ Section LISTPRED.
     omega.
   Qed.
 
-  Theorem listpred_extract : forall l i def,
+  Theorem listpred_extract : forall l i,
     i < length l ->
-    listpred l =p=> exists F, F * prd (selN l i def).
+    listpred l =p=> exists F, F * prd (selN l i).
   Proof.
-    intros; rewrite listpred_fwd with (def:=def) by eauto; cancel.
+    intros; rewrite listpred_fwd by eauto; cancel.
   Qed.
 
   Theorem listpred_pick : forall x l, 
@@ -110,9 +111,9 @@ Section LISTPRED.
     apply listpred_listpred'.
   Qed.
 
-  Theorem listpred_isolate : forall l i def,
+  Theorem listpred_isolate : forall l i,
     i < length l ->
-    listpred l <=p=> listpred (removeN l i) * prd (selN l i def).
+    listpred l <=p=> listpred (removeN l i) * prd (selN l i).
   Proof.
     intros.
     unfold removeN.
@@ -128,20 +129,20 @@ Section LISTPRED.
     i < length l ->
     listpred (updN l i v) <=p=> listpred (removeN l i) * prd v.
   Proof.
-    intros; rewrite listpred_isolate with (def:=v);
+    intros; rewrite listpred_isolate;
        [ | rewrite length_updN; eauto].
     rewrite removeN_updN.
     rewrite selN_updN_eq; auto.
   Qed.
 
-  Theorem listpred_updN_selN: forall l i v def,
+  Theorem listpred_updN_selN: forall l i v,
     i < length l ->
-    prd (selN l i def) =p=> prd v ->
+    prd (selN l i) =p=> prd v ->
     listpred l =p=> listpred (updN l i v).
   Proof.
     intros.
     rewrite listpred_updN by auto.
-    rewrite listpred_isolate with (def:=def) at 1 by eauto.
+    rewrite listpred_isolate at 1 by eauto.
     cancel; auto.
   Qed.
 
@@ -266,6 +267,8 @@ Section LISTMATCH.
   Variable AEQ : DecEq AT.
   Variable V : Type.
   Variable prd : A -> B -> @pred AT AEQ V.
+  Variable defA : Defaultable A.
+  Variable defB : Defaultable B.
 
   Definition pprd := prod_curry prd.
 
@@ -295,16 +298,16 @@ Section LISTMATCH.
   Qed.
 
 
-  Theorem listmatch_isolate : forall a b i ad bd,
+  Theorem listmatch_isolate : forall a b i,
     i < length a -> i < length b ->
     listmatch a b <=p=>
-    listmatch (removeN a i) (removeN b i) * prd (selN a i ad) (selN b i bd).
+    listmatch (removeN a i) (removeN b i) * prd (selN a i) (selN b i).
   Proof.
     intros; unfold listmatch.
     unfold piff; split.
 
     cancel.
-    rewrite listpred_isolate with (i := i) (def := (ad, bd)) at 1.
+    rewrite listpred_isolate with (i := i) at 1.
     rewrite removeN_combine.
     rewrite selN_combine; auto.
     rewrite combine_length; rewrite <- H2; rewrite Nat.min_id; auto.
@@ -314,7 +317,7 @@ Section LISTMATCH.
     cancel.
     eapply removeN_length_eq with (a:=a) (b:=b) in H0; eauto.
     eapply pimpl_trans2.
-    rewrite listpred_isolate with (i := i) (def := (ad, bd)).
+    rewrite listpred_isolate with (i := i).
     rewrite removeN_combine.
     rewrite selN_combine; auto.
     apply pimpl_refl.
@@ -324,15 +327,15 @@ Section LISTMATCH.
     eapply removeN_length_eq with (a:=a) (b:=b) in H1; eauto.
   Qed.
 
-  Theorem listmatch_extract : forall a b i ad bd,
+  Theorem listmatch_extract : forall a b i,
     i < length a ->
     listmatch a b =p=>
     [[ length a = length b ]] * 
-    listmatch (removeN a i) (removeN b i) * prd (selN a i ad) (selN b i bd).
+    listmatch (removeN a i) (removeN b i) * prd (selN a i) (selN b i).
   Proof.
     intros; unfold listmatch.
     cancel.
-    rewrite listpred_isolate with (i := i) (def := (ad, bd)) at 1.
+    rewrite listpred_isolate with (i := i) at 1.
     rewrite removeN_combine.
     rewrite selN_combine; auto.
     rewrite combine_length; rewrite <- H1; rewrite Nat.min_id; auto.
@@ -346,38 +349,38 @@ Section LISTMATCH.
     listmatch (removeN a i) (removeN b i) * (prd av bv).
   Proof.
     intros; unfold piff; split.
-    rewrite listmatch_isolate with (ad := av) (bd := bv);
+    rewrite listmatch_isolate;
       [ | rewrite length_updN; eauto ..].
     repeat rewrite selN_updN_eq by auto.
     repeat rewrite removeN_updN; auto.
 
     eapply pimpl_trans2.
-    rewrite listmatch_isolate with (i := i) (ad := av) (bd := bv);
+    rewrite listmatch_isolate with (i := i);
       [ | rewrite length_updN; eauto ..].
     apply pimpl_refl.
     repeat rewrite selN_updN_eq by auto.
     repeat rewrite removeN_updN; auto.
   Qed.
 
-  Theorem listmatch_updN_selN: forall a b i av bv ad bd,
+  Theorem listmatch_updN_selN: forall a b i av bv,
     i < length a -> i < length b ->
-    prd (selN a i ad) (selN b i bd) =p=> prd av bv ->
+    prd (selN a i) (selN b i) =p=> prd av bv ->
     listmatch a b =p=> listmatch (updN a i av) (updN b i bv).
   Proof.
     intros.
     rewrite listmatch_updN_removeN by auto.
-    rewrite listmatch_isolate with (ad := ad) (bd := bd) by eauto.
+    rewrite listmatch_isolate by eauto.
     cancel; auto.
   Qed.
 
-  Theorem listmatch_updN_selN_r: forall F a b i av bv ad bd,
+  Theorem listmatch_updN_selN_r: forall F a b i av bv,
     i < length a -> i < length b ->
-    (prd (selN a i ad) (selN b i bd)) * F =p=> prd av bv ->
+    (prd (selN a i) (selN b i)) * F =p=> prd av bv ->
     (listmatch a b) * F =p=> listmatch (updN a i av) (updN b i bv).
   Proof.
     intros.
     rewrite listmatch_updN_removeN by auto.
-    rewrite listmatch_isolate with (ad := ad) (bd := bd) by eauto.
+    rewrite listmatch_isolate by eauto.
     cancel; rewrite sep_star_comm; auto.
   Qed.
 
@@ -392,10 +395,10 @@ Section LISTMATCH.
     eapply listmatch_isolate with (i := length a);
     try rewrite app_length; simpl; omega.
     rewrite removeN_tail.
-    rewrite selN_last with (def := av); auto.
+    rewrite selN_last; auto.
     rewrite H.
     rewrite removeN_tail.
-    rewrite selN_last with (def := bv); auto.
+    rewrite selN_last; auto.
     cancel; auto.
   Qed.
 
