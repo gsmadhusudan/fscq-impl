@@ -107,11 +107,11 @@ Module BALLOC.
   Proof.
     intros. rewrite H. unfold bmap_bits, upd.
     rewrite updN_map_seq by assumption.
-    apply list_selN_ext with (defT := word_def).
+    eapply list_selN_ext.
     repeat rewrite map_length; trivial.
     intros pos Hl.
     rewrite map_length in Hl. rewrite seq_length in Hl.
-    repeat rewrite selN_map with (defT' := nat_def) by (rewrite seq_length; assumption).
+    repeat erewrite selN_map by (rewrite seq_length; assumption).
     rewrite selN_seq by assumption. simpl.
     destruct (Nat.eq_dec pos (wordToNat bn)).
     rewrite e. rewrite natToWord_wordToNat. rewrite fupd_same; trivial.
