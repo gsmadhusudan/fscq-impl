@@ -101,11 +101,22 @@ Theorem list2mem_upd: forall A F (l: list A) i x y,
   -> (F * i |-> y)%pred (list2mem (upd l i y)).
 Proof.
   intros.
-  rewrite listupd_progupd; auto.
+  rewrite listupd_progupd by (eapply list2mem_inbound; eauto).
   apply sep_star_comm.
   apply sep_star_comm in H.
   eapply ptsto_upd; eauto.
-  eapply list2mem_inbound; eauto.
+Qed.
+
+Theorem list2mem_cur_upd : forall F (l : list valuset) i x y old,
+  (F * i |-> x)%pred (list2mem l)
+  -> (F * (exists old, i |-> (y, old)))%pred (list2mem (upd l i (y, old))).
+Proof.
+  intros.
+  rewrite listupd_progupd by (eapply list2mem_inbound; eauto).
+  apply sep_star_comm in H.
+  eapply ptsto_upd in H.
+  eapply pimpl_apply; [|eauto].
+  cancel.
 Qed.
 
 

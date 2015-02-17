@@ -9,6 +9,7 @@ Require Import Hoare.
 Require Import GenSep.
 Require Import SepAuto.
 Require Import BasicProg.
+Require Import Array.
 
 Module Map := FMapAVL.Make(Addr_as_OT).
 
@@ -25,7 +26,7 @@ Record xparams := {
 Module BUFCACHE.
 
   Definition rep (cs : cachestate) (l : list valuset) :=
-    (array $0 l $1 * [[ forall a v, Map.MapsTo a v cs -> fst (sel l a ($0, nil)) = v ]])%pred.
+    (array $0 l $1 * [[ forall a v, Map.MapsTo a v cs -> fst (sel l a) = v ]])%pred.
 
   Definition trim T xp (cs : cachestate) rx : prog T :=
     If (wlt_dec $ (Map.cardinal cs) (MaxCacheBlocks xp)) {
@@ -92,17 +93,13 @@ Module BUFCACHE.
     unfold read.
     hoare_unfold unfold_rep.
 
-    apply list2mem_sel with (def:=($0,nil)) in H as H'.
+    eapply list2mem_sel in H as H'.
     destruct (Map.find a r_) eqn:Hfind; hoare.
 
     apply Map.find_2 in Hfind. apply H8 in Hfind. rewrite <- H' in Hfind. firstorder.
     destruct (weq a a0); subst; eauto.
 
-    (* Some kind of Coq bug??  [rewrite <- H'] should work.. *)
-    assert (w = fst (w, l)); auto.
-    rewrite H0.
-    rewrite H'.
-    reflexivity.
+    rewrite <- H'; reflexivity.
   Qed.
 
   Hint Extern 1 ({{_}} progseq (read _ _ _) _) => apply read_ok : prog.
@@ -118,17 +115,13 @@ Module BUFCACHE.
     >} write xp a v cs.
   Proof.
     unfold write.
-    hoare_unfold unfold_rep.
+    hoare_unfold unfold_rep; unfold upd_prepend.
 
     destruct (weq a a0); subst.
     autorewrite_fast; eauto.
     rewrite sel_upd_ne; eauto.
 
-    apply pimpl_or_r. right. cancel; eauto.
-    instantiate (a:=(Map.add a v cs)).
-    destruct (weq a a0); subst.
-    autorewrite_fast; eauto.
-    rewrite sel_upd_ne; eauto.
+    eapply list2mem_cur_upd; eauto.
   Qed.
 
   Hint Extern 1 ({{_}} progseq (write _ _ _ _) _) => apply write_ok : prog.

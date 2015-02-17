@@ -51,7 +51,7 @@ Notation "x <- p1 ; p2" := (progseq p1 (fun x => p2)) (at level 60, right associ
 
 Definition DecEq (T : Type) := forall (a b : T), {a=b}+{a<>b}.
 
-Definition valuset := (valu * list valu)%type.
+Notation "'valuset'" := ((valu * list valu)%type).
 Definition valuset_list (vs : valuset) := fst vs :: snd vs.
 
 Definition mem {A : Type} {eq : DecEq A} {V: Type} := A -> option V.

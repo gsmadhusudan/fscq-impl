@@ -607,7 +607,7 @@ Module MEMLOG.
     repeat rewrite Map.cardinal_1 in *;
     simpl; try word2nat_solve.
 
-  Ltac solve_lengths := intros; word2nat_clear; simpl; word2nat_simpl; word2nat_rewrites; unfold valuset in *; solve_lengths'.
+  Ltac solve_lengths := intros; word2nat_clear; simpl; word2nat_simpl; word2nat_rewrites; solve_lengths'.
 
   Lemma upd_prepend_length: forall l a v, length (upd_prepend l a v) = length l.
   Proof.
