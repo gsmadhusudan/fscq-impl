@@ -92,9 +92,10 @@ Module BALLOC.
       lxp (xp_to_raxp xp) bn (alloc_state_to_bit Avail) ms;
     rx ms'.
 
-  Lemma selN_seq : forall a b c d, c < b -> selN (seq a b) c d = a + c.
+  Lemma selN_seq : forall a b c, c < b -> selN (seq a b) c = a + c.
   Proof.
-    intros. rewrite nth_selN_eq. apply seq_nth; assumption.
+    intros. rewrite nth_selN_eq with (z:=0). apply seq_nth; assumption.
+    rewrite seq_length; auto.
   Qed.
 
   (* The third hypothesis isn't necessary but makes things simpler *)
@@ -106,11 +107,11 @@ Module BALLOC.
   Proof.
     intros. rewrite H. unfold bmap_bits, upd.
     rewrite updN_map_seq by assumption.
-    eapply list_selN_ext with (default := $ (0)).
+    apply list_selN_ext with (defT := word_def).
     repeat rewrite map_length; trivial.
     intros pos Hl.
     rewrite map_length in Hl. rewrite seq_length in Hl.
-    repeat rewrite selN_map with (default' := 0) by (rewrite seq_length; assumption).
+    repeat rewrite selN_map with (defT' := nat_def) by (rewrite seq_length; assumption).
     rewrite selN_seq by assumption. simpl.
     destruct (Nat.eq_dec pos (wordToNat bn)).
     rewrite e. rewrite natToWord_wordToNat. rewrite fupd_same; trivial.
