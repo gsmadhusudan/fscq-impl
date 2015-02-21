@@ -461,7 +461,8 @@ Ltac list2nmem_ptsto_cancel :=
   match goal with
   | [ |- (_ * ?p |-> ?a)%pred (list2nmem ?l) ] =>
     let Hx := fresh in
-    assert (arrayN 0 l (list2nmem l)) as Hx by eapply list2nmem_array;
+    assert (arrayN 0 l (list2nmem l)) as Hx by
+      (eapply list2nmem_array; eauto with typeclass_instances);
       pred_apply; erewrite arrayN_except; clear Hx; eauto
   end.
 

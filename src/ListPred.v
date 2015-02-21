@@ -432,8 +432,8 @@ Ltac solve_length_eq :=
 Ltac extract_listmatch_at ix :=
   match goal with
     | [  H : context [ listmatch ?p ?a _ ] |- _ ] =>
-            erewrite listmatch_extract with (i := wordToNat ix) in H;
-            try autorewrite with defaults in H; auto;
+            erewrite listmatch_extract with (i := wordToNat ix) in H; auto;
+            destruct_lift H;
             match p with
             | ?n _ => try unfold n at 2 in H
             | _    => try unfold p at 2 in H

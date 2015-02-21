@@ -46,7 +46,6 @@ Module INODE.
     ("blocks", Rec.ArrayF (Rec.WordF addrlen) nr_direct)]).
 
   Definition irec := Rec.data inodetype.
-  Definition irec0 := @Rec.of_word inodetype $0.
 
   Definition itemsz := Rec.len inodetype.
   Definition items_per_valu : addr := $8.
@@ -89,7 +88,7 @@ Module INODE.
     intuition; eauto.
     apply list2nmem_inbound in H4.
     apply lt_wlt; omega.
-    apply list2nmem_sel with (def:=irec0) in H4.
+    eapply list2nmem_sel in H4.
     step.
   Qed.
 
@@ -112,7 +111,7 @@ Module INODE.
     intuition; eauto.
     apply list2nmem_inbound in H5.
     apply lt_wlt; omega.
-    apply list2nmem_sel with (def:=irec0) in H5 as H5'.
+    eapply list2nmem_sel in H5 as H5'.
     step.
     autorewrite with core; auto.
     eapply list2nmem_upd; eauto.
@@ -126,7 +125,6 @@ Module INODE.
 
   Definition indtype := Rec.WordF addrlen.
   Definition indblk := Rec.data indtype.
-  Definition ind0 := @Rec.of_word indtype $0.
 
   Definition nr_indirect := 64.
   Definition wnr_indirect : addr := natToWord addrlen nr_indirect.
@@ -186,7 +184,7 @@ Module INODE.
     apply list2nmem_inbound in H4.
     rewrite H7 in H4; auto.
     subst.
-    eapply list2nmem_sel with (def:=$0) in H4; auto.
+    eapply list2nmem_sel in H4; auto.
   Qed.
 
 
@@ -253,9 +251,9 @@ Module INODE.
     simpl; rewrite IHn; auto.
   Qed.
 
-  Lemma repeat_selN : forall T i n (v def : T),
+  Lemma repeat_selN : forall T {defT : Defaultable T} i n (v : T),
     i < n
-    -> selN (repeat v n) i def = v.
+    -> selN (repeat v n) i  = v.
   Proof.
     induction i; destruct n; firstorder; inversion H.
   Qed.
@@ -333,7 +331,7 @@ Module INODE.
   Definition iget T lxp xp inum off ms rx : prog T := Eval compute_rec in
     i <- irget lxp xp inum ms;
     If (wlt_dec off wnr_direct) {
-      rx (sel (i :-> "blocks") off $0)
+      rx (sel (i :-> "blocks") off)
     } else {
       v <- indget lxp (i :-> "indptr") (off ^- wnr_direct) ms;
       rx v
@@ -479,10 +477,10 @@ Module INODE.
     [[ IBlocks ino = firstn (length (IBlocks ino)) (rec :-> "blocks") ]]
     )%pred.
 
-  Lemma inode_well_formed : forall F xp l i inum m def,
+  Lemma inode_well_formed : forall F xp l i inum m,
     (F * irrep xp l)%pred m
     -> inum < length l
-    -> i = selN l inum def
+    -> i = selN l inum
     -> Rec.well_formed i.
   Proof.
     unfold irrep.
@@ -509,7 +507,7 @@ Module INODE.
   Lemma inode_blocks_length: forall m xp l inum F,
     (F * irrep xp l)%pred m ->
     inum < length l ->
-    length (selN l inum irec0 :-> "blocks") = nr_direct.
+    length (selN l inum :-> "blocks") = nr_direct.
   Proof.
     intros.
     apply direct_blocks_length.
@@ -519,7 +517,7 @@ Module INODE.
   Lemma inode_blocks_length': forall m xp l inum F d d0 d1 d2 u,
     (F * irrep xp l)%pred m ->
     inum < length l ->
-    (d, (d0, (d1, (d2, u)))) = selN l inum irec0 ->
+    (d, (d0, (d1, (d2, u)))) = selN l inum ->
     length d2 = nr_direct.
   Proof.
     intros.
@@ -578,66 +576,9 @@ Module INODE.
   Qed.
 
 
-  (* Hints for resolving default values *)
-
-  Fact resolve_sel_irec0 : forall l i d,
-    d = irec0 -> sel l i d = sel l i irec0.
-  Proof.
-    intros; subst; auto.
-  Qed.
-
-  Fact resolve_selN_irec0 : forall l i d,
-    d = irec0 -> selN l i d = selN l i irec0.
-  Proof.
-    intros; subst; auto.
-  Qed.
-
-  Fact resolve_sel_inode0 : forall l i d,
-    d = inode0 -> sel l i d = sel l i inode0.
-  Proof.
-    intros; subst; auto.
-  Qed.
-
-  Fact resolve_selN_inode0 : forall l i d,
-    d = inode0 -> selN l i d = selN l i inode0.
-  Proof.
-    intros; subst; auto.
-  Qed.
-
-  Fact resolve_sel_addr0 : forall l i (d : addr),
-    d = $0 -> sel l i d = sel l i $0.
-  Proof.
-    intros; subst; auto.
-  Qed.
-
-  Fact resolve_selN_addr0 : forall l i (d : addr),
-    d = $0 -> selN l i d = selN l i $0.
-  Proof.
-    intros; subst; auto.
-  Qed.
-
-  Fact resolve_sel_valu0 : forall l i (d : valu),
-    d = $0 -> sel l i d = sel l i $0.
-  Proof.
-    intros; subst; auto.
-  Qed.
-
-  Fact resolve_selN_valu0 : forall l i (d : valu),
-    d = $0 -> selN l i d = selN l i $0.
-  Proof.
-    intros; subst; auto.
-  Qed.
-
-
-  Hint Rewrite resolve_sel_irec0  using reflexivity : defaults.
-  Hint Rewrite resolve_selN_irec0 using reflexivity : defaults.
-  Hint Rewrite resolve_sel_inode0   using reflexivity : defaults.
-  Hint Rewrite resolve_selN_inode0  using reflexivity : defaults.
-  Hint Rewrite resolve_sel_addr0    using reflexivity : defaults.
-  Hint Rewrite resolve_selN_addr0   using reflexivity : defaults.
-  Hint Rewrite resolve_sel_valu0    using reflexivity : defaults.
-  Hint Rewrite resolve_selN_valu0   using reflexivity : defaults.
-
+  Instance inode_def : Defaultable inode := {
+    the_default := inode0
+  }.
 
   Lemma rep_bound: forall F bxp xp l m,
     (F * rep bxp xp l)%pred m
@@ -650,15 +591,15 @@ Module INODE.
 
   Lemma blocks_bound: forall F bxp xp l m i,
     (F * rep bxp xp l)%pred m
-    -> length (IBlocks (sel l i inode0)) <= wordToNat (natToWord addrlen blocks_per_inode).
+    -> length (IBlocks (sel l i)) <= wordToNat (natToWord addrlen blocks_per_inode).
   Proof.
     unfold rep, sel; intros.
     destruct_lift H.
     destruct (lt_dec (wordToNat i) (length l)).
+
     extract_listmatch_at i; unfold nr_direct in *.
-    autorewrite with defaults. 
-    unfold blocks_per_inode, nr_indirect in H8; simpl in H8; auto.
-    rewrite selN_oob by omega.
+    unfold blocks_per_inode, nr_indirect in *; simpl in *; auto.
+    erewrite selN_oob by omega.
     simpl; omega.
   Qed.
 
@@ -916,9 +857,9 @@ Module INODE.
 
   Hint Resolve len_plus_one_eq1.
 
-  Lemma firstn_plusone_app_selN: forall T n a b (def : T),
+  Lemma firstn_plusone_app_selN: forall T {defT : Defaultable T} n (a b : list T),
     n = length a -> length b > 0
-    -> firstn (n + 1) (a ++ b) = a ++ (selN b 0 def) :: nil.
+    -> firstn (n + 1) (a ++ b) = a ++ (selN b 0) :: nil.
   Proof.
     intros.
     erewrite firstn_plusone_selN; eauto.
@@ -944,7 +885,7 @@ Module INODE.
     {< F A B mbase m ilist (reclist : list irec) ino,
     PRE      MEMLOG.rep lxp (ActiveTxn mbase m) ms *
              [[ length (IBlocks ino) < blocks_per_inode ]] *
-             [[ i0 = sel reclist inum irec0 ]] *
+             [[ i0 = sel reclist inum ]] *
              [[ i0 :-> "len" < wnr_direct ]]%word *
              [[ (F * irrep xp reclist *
                  listmatch (inode_match bxp) ilist reclist)%pred (list2mem m) ]] *
@@ -968,16 +909,18 @@ Module INODE.
 
     instantiate (a1 := Build_inode ((IBlocks i) ++ [a]) (ISize i)).
     2: eapply list2nmem_upd; eauto.
-    2: simpl; eapply list2nmem_app; eauto.
+    2: simpl; apply list2nmem_app; eauto.
+    2: eauto with typeclass_instances.
 
     repeat rewrite_list2nmem_pred; inode_bounds.
+    2: eauto with typeclass_instances.
     destruct_listmatch_n.
 
-    eapply listmatch_updN_selN; autorewrite with defaults; inode_bounds.
+    eapply listmatch_updN_selN; inode_bounds.
     repeat rewrite inode_match_is_direct; eauto.
     unfold inode_match_direct.
     simpl; unfold sel; autorewrite with core.
-    rewrite app_length; rewrite H10; simpl.
+    rewrite app_length. rewrite H12. simpl.
     rec_simpl; cancel.
 
     eapply wlt_plus_one_le; eauto.
@@ -1054,7 +997,7 @@ Module INODE.
     PRE      MEMLOG.rep lxp (ActiveTxn mbase m) ms *
              [[ length (IBlocks ino) < blocks_per_inode ]] *
              [[ i0 :-> "len" > wnr_direct ]]%word *
-             [[ i0 = sel reclist inum irec0 ]] *
+             [[ i0 = sel reclist inum ]] *
              [[ (F * irrep xp reclist *
                  listmatch (inode_match bxp) ilist reclist)%pred (list2mem m) ]] *
              [[ (A * #inum |-> ino)%pred (list2nmem ilist) ]] *
@@ -1141,7 +1084,7 @@ Module INODE.
     {< F A B mbase m ilist (reclist : list irec) freelist ino,
     PRE      MEMLOG.rep lxp (ActiveTxn mbase m) ms *
              [[ length (IBlocks ino) < blocks_per_inode ]] *
-             [[ i0 = sel reclist inum irec0 ]] *
+             [[ i0 = sel reclist inum ]] *
              [[ i0 :-> "len" = wnr_direct ]]%word *
              [[ (F * irrep xp reclist * BALLOC.rep bxp freelist *
                  listmatch (inode_match bxp) ilist reclist)%pred (list2mem m) ]] *

@@ -64,7 +64,9 @@ Module BFILE.
     BFData : list valu
   }.
 
-  Definition bfile0 := Build_bfile nil.
+  Instance bfile_def : Defaultable bfile := {
+    the_default := Build_bfile nil
+  }.
 
   Definition data_match bxp (v : valu) a : @pred _ (@weq addrlen) _ :=
     (a |-> v * [[ BALLOC.valid_block bxp a ]])%pred.
@@ -78,22 +80,6 @@ Module BFILE.
      listmatch (file_match bxp) flist ilist
     )%pred.
 
-
-  Fact resolve_sel_bfile0 : forall l i d,
-    d = bfile0 -> sel l i d = sel l i bfile0.
-  Proof.
-    intros; subst; auto.
-  Qed.
-
-  Fact resolve_selN_bfile0 : forall l i d,
-    d = bfile0 -> selN l i d = selN l i bfile0.
-  Proof.
-    intros; subst; auto.
-  Qed.
-
-
-  Hint Rewrite resolve_sel_bfile0  using reflexivity : defaults.
-  Hint Rewrite resolve_selN_bfile0 using reflexivity : defaults.
 
   Ltac file_bounds' :=
     match goal with
@@ -130,6 +116,7 @@ Module BFILE.
     hoare.
     list2nmem_ptsto_cancel; file_bounds.
 
+    (* XXX it appears that [subst] interacts badly with typeclass evars... *)
     rewrite_list2nmem_pred.
     destruct_listmatch_n.
     subst; unfold sel; auto.
@@ -161,7 +148,7 @@ Module BFILE.
     erewrite listmatch_isolate with (i := wordToNat inum) by file_bounds.
     unfold file_match at 2; autorewrite with defaults.
     erewrite listmatch_isolate with (prd := data_match bxp) (i := wordToNat off) by file_bounds.
-    unfold data_match, sel; autorewrite with defaults.
+    unfold data_match, sel.
     cancel.
 
     unfold MEMLOG.log_intact; cancel.

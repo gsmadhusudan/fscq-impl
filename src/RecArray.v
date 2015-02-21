@@ -93,6 +93,7 @@ Section RECARRAY.
   Definition item := Rec.data itemtype.
   Definition blocktype : Rec.type := Rec.ArrayF itemtype (wordToNat items_per_valu).
   Definition block := Rec.data blocktype.
+  Definition block_zero := @Rec.of_word blocktype $0.
   Variable blocksz_ok : valulen = Rec.len blocktype.
 
   Theorem items_per_valu_not_0 : items_per_valu <> $0.
