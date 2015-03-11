@@ -9,6 +9,9 @@ Require Import Arith.
 Require Import Omega.
 Require Import Array.
 Require Import Psatz.
+Require Import MemLog.
+Require Import Bool.
+Require Import GenSep.
 
 Import ListNotations.
 
@@ -16,8 +19,10 @@ Set Implicit Arguments.
 
 Parameter maxlen : addr. (* Number of entries on disk *)
 
+Definition kv_pointer := addr.
 Definition empty_value : valu := $0.
-Definition entry := (addr * valu)%type.
+Definition empty_valuset : valuset := ($0, @nil valu).
+Definition entry : Type := (addr * valu).
 Definition empty_entry : entry := ($0, $0).
 
 Definition list_prefix A (p l : list A) :=
@@ -32,17 +37,20 @@ Proof.
   lia.
 Qed.
 
-Definition rep l :=
-  (exists diskl,
-   $0 |-> addr2valu $ (length l) *
-   array $1 (map (fun e => addr2valu (fst e)) diskl) $2 *
-   array $2 (map snd diskl) $2 *
-   [[ length diskl = wordToNat maxlen ]] *
-   [[ list_prefix l diskl ]])%pred.
+(* Abstract representation of list of (key, value) puts. *)
+Definition rep l (kv_p : kv_pointer) := (exists diskl,
+  array $0 (map (fun e => addr2valu (fst e)) diskl) $2 *
+  array $1 (map snd diskl) $2 *
+  [[ length diskl = wordToNat maxlen / 2 ]] *
+  [[ length l = wordToNat kv_p ]] *
+  [[ list_prefix l diskl ]])%pred.
 
+
+(* Key k isn't in the current store. *)
 Definition no_such_put (l : list entry) (k : addr) : Prop :=
   ~ exists v, In (k, v) l.
 
+(*
 Fixpoint is_last_put (l : list entry) (k : addr) (v : valu) :=
   match l with
   | nil => False
@@ -50,103 +58,108 @@ Fixpoint is_last_put (l : list entry) (k : addr) (v : valu) :=
     (k = k' /\ v = v' /\ no_such_put l k) \/
     (is_last_put tl k v)
   end.
+*)
 
-Definition get T (k : addr) (rx : valu -> prog T) :=
-  l <- Read $0;
-  final_value <- For i < (valu2addr l)
-    Ghost on_disk_list
-    Loopvar current_value <- empty_value
+(* Key k has value v in the current store. *)
+(* Q: Changed from Fixpoint so that I could assert that is_last_put is true
+      for empty_value. Better way to do that? *)
+Inductive is_last_put : (list entry) -> addr -> valu -> Prop :=
+  | KV_no_put : forall k,
+    is_last_put nil k empty_value
+  | KV_key_eq : forall k v tl,
+    no_such_put tl k -> is_last_put ((k, v) :: tl) k v
+  | KV_key_neq : forall k v k' v' tl,
+    ~(k = k') \/ v = v' -> is_last_put tl k v -> is_last_put ((k', v') :: tl) k v.
+
+
+(* Return `value` for the last instance of `key`. *)
+Definition get T (kv_p : kv_pointer) (key : addr) xp cs rx : prog T :=
+  mscs <- MEMLOG.begin xp cs;
+  let2 (mscs, final_value) <- For i < kv_p
+    Ghost F
+    Loopvar current_value <- (mscs, empty_value)
     Continuation lrx
     Invariant
-      rep on_disk_list
+      F
     OnCrash
-      rep on_disk_list
+      F
     Begin
-      disk_key <- ArrayRead $1 i $2;
-      If (weq (valu2addr disk_key) k) {
-        disk_value <- ArrayRead $2 i $2;
-        lrx disk_value
-      } else {
+      let2 (mscs, memory_key) <- MEMLOG.read xp i mscs;
+      if (weq memory_key (addr2valu key)) then
+        let2 (mscs, memory_value) <- MEMLOG.read xp (i ^+ $1) mscs;
+        lrx (mscs, memory_value)
+      else
         lrx current_value
-      }
   Rof;
-  rx final_value.
+  let2 (mscs, ok) <- MEMLOG.commit xp mscs;
+  If (bool_dec ok true) {
+    rx (mscs, final_value)
+  } else {
+    rx (mscs, empty_value)
+  }.
 
 Hint Rewrite map_length.
 
-Theorem get_ok: forall k,
-  {< l,
-  PRE    rep l
-  POST:r rep l * [[ is_last_put l k r ]]
-  CRASH  rep l
-  >} get k.
+
+Theorem get_ok: forall kv_p key xp cs,
+  {< mbase F l value,
+  PRE                   MEMLOG.rep xp (NoTransaction mbase) (ms_empty, cs) *
+                        [[ is_last_put l key value ]] *
+                        [[ (rep l kv_p * F)%pred (list2mem mbase) ]]
+
+  POST:(mscs', rvalue)  MEMLOG.rep xp (NoTransaction mbase) mscs' *
+                        [[ value = rvalue ]] *
+                        [[ is_last_put l key value ]] *
+                        [[ (rep l kv_p * F)%pred (list2mem mbase) ]]
+
+  CRASH                 MEMLOG.would_recover_old xp mbase \/
+                        (exists m', MEMLOG.might_recover_cur xp mbase m' *
+                        [[ (rep l kv_p * F)%pred (list2mem m') ]])
+  >} get kv_p key xp cs.
 Proof.
-  unfold get, rep.
-  hoare.
+  unfold get. unfold rep.
+Admitted.
 
-  simpl_list.
-  eapply lt_le_trans; [| apply list_prefix_length; eauto ].
-  wordcmp.
-  eapply le_trans; [ apply list_prefix_length; eauto |].
-  wordcmp.
-
-  simpl_list.
-  eapply lt_le_trans; [| apply list_prefix_length; eauto ].
-  wordcmp.
-  eapply le_trans; [ apply list_prefix_length; eauto |].
-  wordcmp.
-
-  admit.
-Qed.
-
-
-Definition put T k v (rx : bool -> prog T) :=
-  l <- Read $0;
-  If (weq (valu2addr l) maxlen) {
-    rx false
+Definition put T (kv_p : kv_pointer) (key : addr) (value : valu) xp cs rx : prog T :=
+  mscs <- MEMLOG.begin xp cs;
+  If (weq kv_p maxlen) {
+    let2 (mscs, ok) <- MEMLOG.commit xp mscs;
+    rx (mscs, false)
   } else {
-    ArrayWrite $1 (valu2addr l) $2 (addr2valu k);;
-    ArrayWrite $2 (valu2addr l) $2 v;;
-    Write ($0) (l ^+ $1);;
-    rx true
+    mscs <- MEMLOG.write xp kv_p (addr2valu key) mscs;
+    mscs <- MEMLOG.write xp (kv_p ^+ $1) value mscs;
+    let2 (mscs, ok) <- MEMLOG.commit xp mscs;
+    If (bool_dec ok true) {
+      rx (mscs, ok)
+    } else {
+      rx (mscs, false)
+    }
   }.
 
-Theorem put_ok: forall k v,
-  {< l,
-  PRE    rep l
-  POST:r [[ r = false ]] * rep l \/
-         [[ r = true ]] * rep (l ++ [(k, v)])
-  CRASH  rep l \/ rep (l ++ [(k, v)])
-  >} put k v.
+Theorem put_ok: forall kv_p key value xp cs,
+  {< mbase F l old_value,
+  PRE               MEMLOG.rep xp (NoTransaction mbase) (ms_empty, cs) *
+                    [[ is_last_put l key old_value ]] *
+                    [[ (rep l kv_p * F)%pred (list2mem mbase) ]]
+
+  (* Q: Does separation logic account for all the is_last_put and rep stuff, or is that necessary here? *)
+  POST:(mscs', ok)  ([[ ok = true /\ is_last_put ((key, value) :: l) key value ]] *
+                     exists m', MEMLOG.rep xp (NoTransaction m') mscs' *
+                     [[ (rep ((key, value) :: l) (kv_p ^+ $2) * F)%pred (list2mem m') ]]) \/
+                    ([[ ok = false /\ is_last_put l key old_value ]] *
+                     ((MEMLOG.rep xp (NoTransaction mbase) mscs' *
+                       [[ (rep l kv_p * F)%pred (list2mem mbase) ]]) \/
+                      (exists m', MEMLOG.rep xp (NoTransaction m') mscs' *
+                       [[ (rep l kv_p * F)%pred (list2mem m') ]])
+                     )
+                    )
+
+  CRASH             MEMLOG.would_recover_old xp mbase
+                    \/
+                    (exists m', MEMLOG.might_recover_cur xp mbase m' *
+                     (* Q: Even in this case, rep might not hold for (key, value) :: l because
+                           the disk might be full...How to state that here? *)
+                     [[ (rep l kv_p * F)%pred (list2mem m') ]])
+  >} put kv_p key value xp cs.
 Proof.
-  unfold put, rep.
-  hoare.
-
-  admit.
-  admit.
-
-  apply pimpl_or_r. right. cancel.
-  instantiate (a := (upd l0 $ (length l) (k, v))).
-  autorewrite_fast.
-  rewrite addr2valu2addr. rewrite app_length. rewrite natToWord_plus. cancel.
-  admit.
-
-  autorewrite_fast; auto.
-  admit.
-
-  apply pimpl_or_r. left. cancel.
-  instantiate (a := (upd l0 $ (length l) (k, v))).
-  rewrite addr2valu2addr. autorewrite_fast. cancel.
-  autorewrite_fast; auto.
-  admit.
-
-  admit.
-
-  apply pimpl_or_r. left. cancel.
-  instantiate (a := (upd l0 $ (length l) (k, v))).
-  rewrite addr2valu2addr. autorewrite_fast. cancel.
-  autorewrite_fast; auto.
-  admit.
-
-  admit.
-Qed.
+Admitted.
