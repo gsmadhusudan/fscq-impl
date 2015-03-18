@@ -41,35 +41,21 @@ Proof.
   lia.
 Qed.
 
-Lemma list_prefix_append_helper : forall T (a : T) (l : list T) n,
-  firstn (n + 1) (a :: l) = a :: firstn n (l).
-Proof.
-  intros.
-  rewrite plus_comm.
-  auto.
-Qed.
-
 
 Lemma list_prefix_append : forall T (a b : list T) (x : T),
-  list_prefix a b -> length a < # (maxlen) -> length b > length a -> list_prefix (a ++ [x]) (upd b (natToWord _ (length a)) x).
+  list_prefix a b ->
+  length a < # (maxlen) ->
+  length b > length a ->
+  list_prefix (a ++ [x]) (upd b (natToWord _ (length a)) x).
 Proof.
-  intros T a. induction a; intros; destruct b as [| b'].
-  inversion H1.
-  unfold list_prefix. auto.
-
-  inversion H1.
-  unfold list_prefix, upd, updN.
-
+  intros.
+  unfold list_prefix.
+  rewrite app_length. simpl.
+  unfold upd.
   erewrite wordToNat_natToWord_bound with (bound:=maxlen); try omega.
-  simpl. fold updN.
-  assert (Hhead_eq: b' = a). inversion H. reflexivity.
-  assert (Htail_eq: firstn (length (a0 ++ [x])) (updN b (length a0) x) = a0 ++ [x]).
-    unfold upd in IHa.
-    simpl in H0, H1.
-    erewrite wordToNat_natToWord_bound with (bound:=maxlen) in IHa; try omega.
-    apply IHa; try omega.
-    subst. inversion H. rewrite H3. auto.
-  rewrite Hhead_eq, Htail_eq. auto.
+  rewrite <- firstn_app_updN_eq; auto.
+  unfold list_prefix in H.
+  rewrite H. reflexivity.
 Qed.
 
 
@@ -193,6 +179,7 @@ Proof.
   instantiate (a := upd l $ (length l0) (key, value)).
   repeat rewrite map_upd. rewrite addr2valu2addr.
   cancel.
+  (* Need theorem about addr2valu being equal to valu *)
   rewrite app_length. simpl. admit.
 
   rewrite length_upd. auto. apply list_prefix_append; try (auto; rewrite H8; omega).
@@ -202,8 +189,13 @@ Proof.
 
   unfold MEMLOG.log_intact.
   cancel.
-(*  apply pimpl_or_r. right. cancel. *)
-  admit.
+  apply pimpl_or_r. right. cancel.
+  instantiate (a := upd l $ (length l0) (key, value)).
+  repeat rewrite map_upd. rewrite addr2valu2addr.
+  cancel.
+
+  rewrite app_length. simpl. admit.
+  rewrite length_upd. auto. apply list_prefix_append; try (auto; rewrite H8; omega).
 
   unfold MEMLOG.would_recover_old. cancel.
   unfold MEMLOG.would_recover_old. cancel.
@@ -211,9 +203,5 @@ Proof.
   unfold MEMLOG.would_recover_old. cancel.
   unfold MEMLOG.would_recover_old. cancel.
   unfold MEMLOG.would_recover_old. cancel.
-
-  (*rewrite H9. rewrite wplus_alt. unfold wplusN, wordBinN.
-  erewrite wordToNat_natToWord_bound with (bound:=maxlen). simpl. omega. simpl. apply wlt_lt in H4. omega.
-*)
 
 Qed.
