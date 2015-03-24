@@ -109,6 +109,17 @@ Definition get T (key : addr) xp mscs rx : prog T :=
   rx ^(mscs, final_value).
 
 
+Ltac solve_list_bound H_list_prefix H_list_bound :=
+  try apply list_prefix_length in H_list_prefix;
+  try rewrite addr2valu2addr in H_list_bound;
+  try (eapply wlt_lt_bound with (bound:=# (maxlen)) in H_list_bound; try omega);
+  try (rewrite wordToNat_natToWord_bound with (bound:=maxlen); simpl; omega).
+
+Ltac list_prefix_sel_eq H_list_prefix H_list_bound :=
+  try (unfold list_prefix in H_list_prefix; rewrite <- H_list_prefix);
+  try unfold sel;
+  try (erewrite selN_firstn; try solve_list_bound H_list_prefix H_list_bound; auto).
+
 Theorem get_ok: forall key xp mscs,
   {< mbase MF l,
   PRE                   MEMLOG.rep xp MF (NoTransaction mbase) mscs *
@@ -118,16 +129,77 @@ Theorem get_ok: forall key xp mscs,
                         MEMLOG.rep xp MF (NoTransaction mbase) mscs' *
                         [[ is_last_put l key rvalue ]]
 
-  CRASH                 MEMLOG.would_recover_old xp MF mbase
+  CRASH                 MEMLOG.would_recover_old xp MF mbase \/
+                        MEMLOG.would_recover_either xp MF mbase mbase
   >} get key xp mscs.
 Proof.
-  (*unfold get. unfold rep.
+  unfold get. unfold rep.
   step.
   step.
-  constructor.*)
+  step.
+  constructor.
+  step.
+  rewrite map_length.
+  solve_list_bound H14 H.
 
+  step.
+  step.
+  rewrite map_length.
+  solve_list_bound H14 H.
 
-Admitted.
+  (* If the key on this iteration matches, then the value returned to the next
+     iteration is the last put in the first n values that we've seen so far. *)
+  step.
+  replace (firstn # (m0 ^+ $ (1)) l0) with ((firstn # (m0) l0) ++ [(key, a1)]).
+  constructor.
+  rewrite wplus_alt. unfold wplusN, wordBinN.
+  erewrite wordToNat_natToWord_bound with (bound:=maxlen).
+  erewrite firstn_plusone_selN.
+  erewrite sel_map in H5. rewrite H5.
+  erewrite sel_map in H12.
+  apply addr2valu_inj in H12.
+  rewrite <- H12.
+  unfold sel. rewrite <- surjective_pairing.
+  replace (selN l1 # (m0) empty_entry) with (selN l0 # (m0) empty_entry);
+    list_prefix_sel_eq H14 H.
+  instantiate (default'0:=empty_entry). instantiate (def:=empty_entry). auto.
+  solve_list_bound H14 H.
+  solve_list_bound H14 H.
+  solve_list_bound H14 H.
+  solve_list_bound H14 H.
+  unfold MEMLOG.would_recover_old. cancel.
+
+  (* Else the key on this iteration doesn't match. Then the same value from
+     the last iteration continues to be the most recent put. *)
+  step.
+  erewrite wordToNat_plusone with (w':=$ (length l0)).
+  replace (S # (m0)) with (# (m0) + 1); try omega.
+  erewrite firstn_plusone_selN.
+  instantiate (def:=empty_entry).
+  rewrite surjective_pairing with (p:=selN l0 (wordToNat m0) empty_entry).
+  apply KV_key_neq; auto.
+  erewrite sel_map in H12.
+  unfold not. intros.
+  apply H12.
+  replace (selN l0 # (m0) empty_entry) with (selN l1 # (m0) empty_entry) in H5;
+    list_prefix_sel_eq H14 H.
+  rewrite H5. auto.
+  solve_list_bound H14 H.
+  solve_list_bound H14 H.
+  rewrite addr2valu2addr in H. auto.
+
+  hoare_unfold MEMLOG.log_intact_unfold.
+  step.
+  step; try (
+    rewrite addr2valu2addr in H9;
+    rewrite firstn_oob in H9; auto;
+    solve_list_bound H12 H
+    ).
+  hoare_unfold MEMLOG.log_intact_unfold.
+  hoare_unfold MEMLOG.log_intact_unfold.
+  hoare_unfold MEMLOG.log_intact_unfold.
+  hoare_unfold MEMLOG.log_intact_unfold.
+Qed.
 
 
 Definition put T (key : addr) (value : valu) xp mscs rx : prog T :=
