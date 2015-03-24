@@ -259,6 +259,16 @@ Proof.
   apply split1_combine.
 Qed.
 
+Lemma addr2valu_inj: forall a b,
+  addr2valu a = addr2valu b -> a = b.
+Proof.
+  intros.
+  assert (H1: valu2addr (addr2valu a) = valu2addr (addr2valu b)).
+    rewrite H. auto.
+  repeat rewrite addr2valu2addr in H1.
+  auto.
+Qed.
+
 Global Opaque addr2valu.
 Global Opaque valu2addr.
 (* Once this bug is fixed:
