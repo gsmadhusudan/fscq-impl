@@ -133,7 +133,7 @@ Admitted.
 Definition put T (key : addr) (value : valu) xp mscs rx : prog T :=
   mscs <- MEMLOG.begin xp mscs;
   let^ (mscs, kv_p) <- MEMLOG.read xp kv_pointer mscs;
-    mscs <- MEMLOG.write xp (kv_pointer) (kv_p ^+ $1) mscs;
+    mscs <- MEMLOG.write xp (kv_pointer) (addr2valu (valu2addr kv_p ^+ $1)) mscs;
     mscs <- MEMLOG.write_array xp kBase (valu2addr kv_p) $2 (addr2valu key) mscs;
     mscs <- MEMLOG.write_array xp vBase (valu2addr kv_p) $2 value mscs;
     let^ (mscs, ok) <- MEMLOG.commit xp mscs;
@@ -180,7 +180,8 @@ Proof.
   repeat rewrite map_upd. rewrite addr2valu2addr.
   cancel.
   (* Need theorem about addr2valu being equal to valu *)
-  rewrite app_length. simpl. admit.
+  rewrite app_length. simpl.
+  rewrite natToWord_plus. cancel.
 
   rewrite length_upd. auto. apply list_prefix_append; try (auto; rewrite H8; omega).
   step.
@@ -194,7 +195,8 @@ Proof.
   repeat rewrite map_upd. rewrite addr2valu2addr.
   cancel.
 
-  rewrite app_length. simpl. admit.
+  rewrite app_length. simpl.
+  rewrite natToWord_plus. cancel.
   rewrite length_upd. auto. apply list_prefix_append; try (auto; rewrite H8; omega).
 
   unfold MEMLOG.would_recover_old. cancel.
