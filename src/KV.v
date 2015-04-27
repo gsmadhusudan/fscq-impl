@@ -20,10 +20,37 @@ Set Implicit Arguments.
 Parameter maxlen : addr. (* Number of entries on disk *)
 
 
+Definition empty_addr : addr := $0.
 Definition empty_value : valu := $0.
 Definition empty_valuset : valuset := ($0, @nil valu).
 Definition entry : Type := (addr * valu).
-Definition empty_entry : entry := ($0, $0).
+Definition empty_entry : entry := (empty_addr, empty_value).
+
+Definition beq_entry (entry1 entry2 : entry) : bool :=
+  andb (weqb (fst entry1) (fst entry2)) (weqb (snd entry1) (snd entry2)).
+
+Theorem beq_entry_true : forall n m,
+  beq_entry n m = true -> n = m.
+Proof.
+  intros. unfold beq_entry in H.
+  apply andb_true_iff in H.
+  destruct H.
+  apply weqb_true_iff in H.
+  apply weqb_true_iff in H0.
+  rewrite surjective_pairing.
+  rewrite <- H. rewrite <- H0.
+  apply surjective_pairing.
+Qed.
+
+Theorem beq_entry_false : forall n m,
+  beq_entry n m = false -> n <> m.
+Proof.
+  intros. unfold beq_entry in H.
+  apply andb_false_iff in H.
+  destruct H;
+    (apply weqb_false_iff in H;
+    intuition; apply H; subst; auto).
+Qed.
 
 Definition kv_pointer : addr := $0.
 Definition kBase : addr := $1.

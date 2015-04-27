@@ -429,7 +429,12 @@ Proof.
     eapply Peano_dec.eq_nat_dec.
     split; intros; try congruence.
     inversion H0. apply eqb_false_iff in H. congruence. }
-Qed.    
+Qed.
+
+Theorem weqb_false_iff : forall sz x y,
+  @weqb sz x y = false <-> x <> y.
+Proof.
+Admitted.
 
 (** * Dependent type helpers *)
 
