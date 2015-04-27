@@ -46,6 +46,19 @@ Fixpoint updN T (vs : list T) (n : nat) (v : T) : list T :=
 Definition upd T (vs : list T) (i : addr) (v : T) : list T :=
   updN vs (wordToNat i) v.
 
+Fixpoint insN T (vs : list T) (n : nat) (v : T) : list T :=
+  match n with
+    | O => v :: vs
+    | S n' =>
+      match vs with
+        | nil => v :: nil
+        | v' :: vs' => v' :: insN vs' n' v
+      end
+    end.
+
+Definition ins T (vs : list T) (i : addr) (v : T) : list T :=
+  insN vs (wordToNat i) v.
+
 Definition upd_prepend (vs : list valuset) (i : addr) (v : valu) : list valuset :=
   upd vs i (v, valuset_list (sel vs i ($0, nil))).
 
