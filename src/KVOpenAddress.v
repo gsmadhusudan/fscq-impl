@@ -81,6 +81,26 @@ Definition get T (key : addr) xp mscs rx : prog T :=
   }.
 
 
+Definition put T (key : addr) (value : valu) xp mscs rx : prog T :=
+  mscs <- MEMLOG.begin xp mscs;
+  let^ (mscs, memory_key) <- MEMLOG.read xp (kBase ^+ (h key) ^* $2) mscs;
+  If (weq memory_key (addr2valu key)) {
+    mscs <- MEMLOG.write xp (vBase ^+ (h key) ^* $2) value mscs;
+    let^ (mscs, ok) <- MEMLOG.commit xp mscs;
+    rx ^(mscs, ok)
+  } else {
+    If (weq memory_key empty_value) {
+      mscs <- MEMLOG.write xp (kBase ^+ (h key) ^* $2) (addr2valu key) mscs;
+      mscs <- MEMLOG.write xp (vBase ^+ (h key) ^* $2) value mscs;
+      let^ (mscs, ok) <- MEMLOG.commit xp mscs;
+      rx ^(mscs, ok)
+    } else {
+      let^ (mscs, ok) <- MEMLOG.commit xp mscs;
+      rx ^(mscs, false)
+    }
+  }.
+
+
 Ltac solve_key_bound H := try (rewrite H; apply hGood).
 
 (* For any disk and key, if the key is on the disk, then the key and
@@ -135,6 +155,53 @@ Proof.
   intuition.
   eauto.
 Qed.
+
+
+(* If the key is already in the store, ensure that it gets updated. *)
+Theorem put_ok1: forall key value xp mscs,
+  {< mbase MF l i,
+  PRE                   MEMLOG.rep xp MF (NoTransaction mbase) mscs *
+                        [[ (rep l)%pred (list2mem mbase) ]] *
+                        [[ key = selN (map fst l) i empty_addr ]]
+
+  POST RET:^(mscs', ok)
+                        ([[ ok = true ]] *
+                         exists m', MEMLOG.rep xp MF (NoTransaction m') mscs' *
+                         [[ (rep (updN l i (key, value)))%pred (list2mem m') ]]) \/
+                        ([[ ok = false ]] *
+                         MEMLOG.rep xp MF (NoTransaction mbase) mscs')
+
+  CRASH
+                        MEMLOG.would_recover_old xp MF mbase
+                        \/
+                        (exists m', MEMLOG.would_recover_either xp MF mbase m' *
+                         [[ (rep (updN l i (key, value)))%pred (list2mem m') ]])
+  >} put key value xp mscs.
+Proof.
+Admitted.
+
+(* If the key is not already in the store, ensure that it gets inserted. *)
+Theorem put_ok2: forall key value xp mscs,
+  {< mbase MF l,
+  PRE                   MEMLOG.rep xp MF (NoTransaction mbase) mscs *
+                        [[ (rep l)%pred (list2mem mbase) ]] *
+                        [[ forall i, i < length l -> selN (map fst l) i empty_addr <> key ]]
+
+  POST RET:^(mscs', ok)
+                        ([[ ok = true ]] *
+                         exists m', MEMLOG.rep xp MF (NoTransaction m') mscs' *
+                         [[ exists i, (rep (insN l i (key, value)))%pred (list2mem m') ]]) \/
+                        ([[ ok = false ]] *
+                         MEMLOG.rep xp MF (NoTransaction mbase) mscs')
+
+  CRASH
+                        MEMLOG.would_recover_old xp MF mbase
+                        \/
+                        (exists m', MEMLOG.would_recover_either xp MF mbase m' *
+                         [[ exists i, (rep (insN l i (key, value)))%pred (list2mem m') ]])
+  >} put key value xp mscs.
+Proof.
+Admitted.
 
 Theorem get_ok: forall key xp mscs,
   {< mbase MF l,
