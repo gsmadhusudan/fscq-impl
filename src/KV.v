@@ -52,6 +52,19 @@ Proof.
     intuition; apply H; subst; auto).
 Qed.
 
+Theorem beq_entry_false_kv : forall key value,
+  key <> empty_addr \/ value <> empty_value ->
+  beq_entry (key, value) empty_entry = false.
+Proof.
+  intros. unfold beq_entry. simpl.
+  inversion H;
+  try (
+    apply weqb_false_iff in H0;
+    rewrite H0;
+    auto);
+  try (destruct (weqb key empty_addr); simpl; auto).
+Qed.
+
 Definition kv_pointer : addr := $0.
 Definition kBase : addr := $1.
 Definition vBase : addr := $2.
