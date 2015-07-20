@@ -107,12 +107,17 @@ Qed.
 Definition wringaddr := wring addrlen.
 Add Ring wringaddr : wringaddr (decidable (weqb_sound addrlen), constants [wcst]).
 
+Inductive mobj :=
+| MObj (T : Type) (v : T).
+
 Inductive prog (T: Type) :=
 | Done (v: T)
 | Read (a: addr) (rx: valu -> prog T)
 | Write (a: addr) (v: valu) (rx: unit -> prog T)
 | Sync (a: addr) (rx: unit -> prog T)
-| Trim (a: addr) (rx: unit -> prog T).
+| Trim (a: addr) (rx: unit -> prog T)
+| MGet (i: nat) (rx: mobj -> prog T)
+| MPut (i: nat) (o: mobj) (rx: unit -> prog T).
 
 Definition progseq (A B:Type) (a:B->A) (b:B) := a b.
 Definition pair_args_helper (A B C:Type) (f: A->B->C) (x: A*B) := f (fst x) (snd x).
@@ -142,28 +147,32 @@ Definition valuset_list (vs : valuset) := fst vs :: snd vs.
 
 Inductive outcome (T: Type) :=
 | Failed
-| Finished (m: @mem addr (@weq addrlen) valuset) (v: T)
-| Crashed (m: @mem addr (@weq addrlen) valuset).
+| Finished (d: @mem addr (@weq addrlen) valuset) (m: @mem _ eq_nat_dec mobj) (v: T)
+| Crashed (d: @mem addr (@weq addrlen) valuset).
 
-Inductive step (T: Type) : @mem _ (@weq addrlen) _ -> prog T ->
-                           @mem _ (@weq addrlen) _ -> prog T -> Prop :=
-| StepRead : forall m a rx v x, m a = Some (v, x) ->
-  step m (Read a rx) m (rx v)
-| StepWrite : forall m a rx v v0 x, m a = Some (v0, x) ->
-  step m (Write a v rx) (upd m a (v, v0 :: x)) (rx tt)
-| StepSync : forall m a rx v l, m a = Some (v, l) ->
-  step m (Sync a rx) (upd m a (v, nil)) (rx tt)
-| StepTrim : forall m a rx vs vs', m a = Some vs ->
-  step m (Trim a rx) (upd m a vs') (rx tt).
+Inductive step (T: Type) : @mem _ (@weq addrlen) _ -> @mem _ eq_nat_dec mobj -> prog T ->
+                           @mem _ (@weq addrlen) _ -> @mem _ eq_nat_dec mobj -> prog T -> Prop :=
+| StepRead : forall d m a rx v x, d a = Some (v, x) ->
+  step d m (Read a rx) d m (rx v)
+| StepWrite : forall d m a rx v v0 x, d a = Some (v0, x) ->
+  step d m (Write a v rx) (upd d a (v, v0 :: x)) m (rx tt)
+| StepSync : forall d m a rx v l, d a = Some (v, l) ->
+  step d m (Sync a rx) (upd d a (v, nil)) m (rx tt)
+| StepTrim : forall d m a rx vs vs', d a = Some vs ->
+  step d m (Trim a rx) (upd d a vs') m (rx tt)
+| StepMGet : forall d m i rx v, m i = Some v ->
+  step d m (MGet i rx) d m (rx v)
+| StepMPut : forall d m i rx v,
+  step d m (MPut i v rx) d (upd m i v) (rx tt).
 
-Inductive exec (T: Type) : mem -> prog T -> outcome T -> Prop :=
-| XStep : forall m m' p p' out, step m p m' p' ->
-  exec m' p' out ->
-  exec m p out
-| XFail : forall m p, (~exists m' p', step m p m' p') -> (~exists r, p = Done r) ->
-  exec m p (Failed T)
-| XCrash : forall m p, exec m p (Crashed T m)
-| XDone : forall m v, exec m (Done v) (Finished m v).
+Inductive exec (T: Type) : mem -> mem -> prog T -> outcome T -> Prop :=
+| XStep : forall d d' m m' p p' out, step d m p d' m' p' ->
+  exec d' m' p' out ->
+  exec d m p out
+| XFail : forall d m p, (~exists d' m' p', step d m p d' m' p') -> (~exists r, p = Done r) ->
+  exec d m p (Failed T)
+| XCrash : forall d m p, exec d m p (Crashed T d)
+| XDone : forall d m v, exec d m (Done v) (Finished d m v).
 
 Hint Constructors exec.
 Hint Constructors step.
@@ -171,32 +180,32 @@ Hint Constructors step.
 
 Inductive recover_outcome (TF TR: Type) :=
 | RFailed
-| RFinished (m: @mem addr (@weq addrlen) valuset) (v: TF)
-| RRecovered (m: @mem addr (@weq addrlen) valuset) (v: TR).
+| RFinished (d: @mem addr (@weq addrlen) valuset) (m: @mem _ eq_nat_dec mobj) (v: TF)
+| RRecovered (d: @mem addr (@weq addrlen) valuset) (m: @mem _ eq_nat_dec mobj) (v: TR).
 
-Definition possible_crash {A : Type} {eq : DecEq A} (m m' : @mem A eq valuset) : Prop :=
+Definition possible_crash {A : Type} {eq : DecEq A} (d d' : @mem A eq valuset) : Prop :=
   forall a,
-  (m a = None /\ m' a = None) \/
-  (exists vs v', m a = Some vs /\ m' a = Some (v', nil) /\ In v' (valuset_list vs)).
+  (d a = None /\ d' a = None) \/
+  (exists vs v', d a = Some vs /\ d' a = Some (v', nil) /\ In v' (valuset_list vs)).
 
 Inductive exec_recover (TF TR: Type)
-  : mem -> prog TF -> prog TR -> recover_outcome TF TR -> Prop :=
-| XRFail : forall m p1 p2, exec m p1 (Failed TF)
-  -> exec_recover m p1 p2 (RFailed TF TR)
-| XRFinished : forall m p1 p2 m' (v: TF), exec m p1 (Finished m' v)
-  -> exec_recover m p1 p2 (RFinished TR m' v)
-| XRCrashedFailed : forall m p1 p2 m' m'r, exec m p1 (Crashed TF m')
-  -> possible_crash m' m'r
-  -> @exec_recover TR TR m'r p2 p2 (RFailed TR TR)
-  -> exec_recover m p1 p2 (RFailed TF TR)
-| XRCrashedFinished : forall m p1 p2 m' m'r m'' (v: TR), exec m p1 (Crashed TF m')
-  -> possible_crash m' m'r
-  -> @exec_recover TR TR m'r p2 p2 (RFinished TR m'' v)
-  -> exec_recover m p1 p2 (RRecovered TF m'' v)
-| XRCrashedRecovered : forall m p1 p2 m' m'r m'' (v: TR), exec m p1 (Crashed TF m')
-  -> possible_crash m' m'r
-  -> @exec_recover TR TR m'r p2 p2 (RRecovered TR m'' v)
-  -> exec_recover m p1 p2 (RRecovered TF m'' v).
+  : mem -> mem -> prog TF -> prog TR -> recover_outcome TF TR -> Prop :=
+| XRFail : forall d m p1 p2, exec d m p1 (Failed TF)
+  -> exec_recover d m p1 p2 (RFailed TF TR)
+| XRFinished : forall d m p1 p2 d' m' (v: TF), exec d m p1 (Finished d' m' v)
+  -> exec_recover d m p1 p2 (RFinished TR d' m' v)
+| XRCrashedFailed : forall d m p1 p2 d' d'r, exec d m p1 (Crashed TF d')
+  -> possible_crash d' d'r
+  -> @exec_recover TR TR d'r empty_mem p2 p2 (RFailed TR TR)
+  -> exec_recover d m p1 p2 (RFailed TF TR)
+| XRCrashedFinished : forall d m p1 p2 d' d'r d'' m'' (v: TR), exec d m p1 (Crashed TF d')
+  -> possible_crash d' d'r
+  -> @exec_recover TR TR d'r empty_mem p2 p2 (RFinished TR d'' m'' v)
+  -> exec_recover d m p1 p2 (RRecovered TF d'' m'' v)
+| XRCrashedRecovered : forall d m p1 p2 d' d'r d'' m'' (v: TR), exec d m p1 (Crashed TF d')
+  -> possible_crash d' d'r
+  -> @exec_recover TR TR d'r empty_mem p2 p2 (RRecovered TR d'' m'' v)
+  -> exec_recover d m p1 p2 (RRecovered TF d'' m'' v).
 
 Hint Constructors exec_recover.
 
