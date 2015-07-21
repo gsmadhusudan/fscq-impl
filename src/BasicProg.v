@@ -39,9 +39,12 @@ Ltac inv_step :=
 
 Theorem read_ok:
   forall (a:addr),
-  {< v,
-  PRE        a |-> v
-  POST RET:r a |-> v * [[ r = (fst v) ]]
+  {< D M || v Fd Fm,
+  PRE        D ## Fd * a |-> v /\
+             M ## Fm
+  POST RET:r D ## Fd * a |-> v /\
+             M ## Fm /\
+             r = fst v
   CRASH      a |-> v
   >} Read a.
 Proof.

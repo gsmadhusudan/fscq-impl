@@ -876,18 +876,24 @@ end.
 
 Theorem nop_ok :
   forall T A v (rx : A -> prog T),
-  {{ fun done_ crash_ => exists F, F * [[ forall r_,
-    {{ fun done' crash' => (fun r => F * [[ r = v ]]) r_ *
-                           [[ done' = done_ ]] * [[ crash' = crash_ ]]}}
-     rx r_ ]] * [[ F =p=> crash_]] }} rx v.
+  {{ fun done_ crash_ disk_ mem_ =>
+     exists Fd Fm,
+     Fd disk_ /\
+     Fm mem_ /\
+     (Fd =p=> crash_) /\
+     forall r_,
+     {{ fun done' crash' disk' mem' =>
+        Fd disk' /\
+        Fm mem' /\
+        r_ = v /\
+        done' = done_ /\
+        crash' = crash_ }} rx r_
+  }} rx v.
 Proof.
   unfold corr2, pimpl.
   intros.
-  destruct H.
-  destruct_lift H.
+  repeat deex.
   eapply H4; eauto.
-  pred_apply.
-  cancel.
 Qed.
 
 Ltac autorewrite_fast_goal :=
