@@ -743,7 +743,7 @@ Theorem pimpl_cok : forall pre pre' (p : prog nat),
   {C pre' C} p ->
   (forall done rely guarantee, pre done rely guarantee =p=> pre' done rely guarantee) ->
   (forall done rely guarantee m, pre done rely guarantee m
-    -> stable (pre done rely guarantee) rely) ->
+    -> stable (pre done rely guarantee) (pre done rely guarantee ~> any /\ rely)) ->
   {C pre C} p.
 Proof.
   unfold env_corr2; intros; eauto.
@@ -867,6 +867,7 @@ Proof.
      eapply pimpl_apply; [| apply H0]; auto.
      cancel.
      pred_apply; cancel.
+     apply H6.
 
   - intros.
     destruct_lift H; subst.
