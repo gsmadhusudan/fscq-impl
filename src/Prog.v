@@ -38,6 +38,7 @@ Module Valulen : VALULEN.
 End Valulen.
 
 Definition addrlen := 64.
+Definition hashlen := 256.
 Notation "'valulen'" := (Valulen.valulen).
 Notation "'valubytes'" := (Valulen.valubytes).
 Notation "'valulen_is'" := (Valulen.valulen_is).
@@ -112,7 +113,8 @@ Inductive prog (T: Type) :=
 | Read (a: addr) (rx: valu -> prog T)
 | Write (a: addr) (v: valu) (rx: unit -> prog T)
 | Sync (a: addr) (rx: unit -> prog T)
-| Trim (a: addr) (rx: unit -> prog T).
+| Trim (a: addr) (rx: unit -> prog T)
+| Hash (sz: nat) (buf: word sz) (rx: word hashlen -> prog T).
 
 Definition progseq (A B:Type) (a:B->A) (b:B) := a b.
 Definition pair_args_helper (A B C:Type) (f: A->B->C) (x: A*B) := f (fst x) (snd x).
@@ -145,6 +147,10 @@ Inductive outcome (T: Type) :=
 | Finished (m: @mem addr (@weq addrlen) valuset) (v: T)
 | Crashed (m: @mem addr (@weq addrlen) valuset).
 
+Parameter hash_inv : word hashlen -> {sz: nat & word sz}.
+Parameter hash_fwd : forall sz, word sz -> word hashlen.
+
+
 Inductive step (T: Type) : @mem _ (@weq addrlen) _ -> prog T ->
                            @mem _ (@weq addrlen) _ -> prog T -> Prop :=
 | StepRead : forall m a rx v x, m a = Some (v, x) ->
@@ -154,13 +160,18 @@ Inductive step (T: Type) : @mem _ (@weq addrlen) _ -> prog T ->
 | StepSync : forall m a rx v l, m a = Some (v, l) ->
   step m (Sync a rx) (upd m a (v, nil)) (rx tt)
 | StepTrim : forall m a rx vs vs', m a = Some vs ->
-  step m (Trim a rx) (upd m a vs') (rx tt).
+  step m (Trim a rx) (upd m a vs') (rx tt)
+| StepHash : forall m sz buf rx h, hash_inv h = existT _ sz buf ->
+  hash_fwd buf = h ->
+  step m (Hash buf rx) m (rx h).
 
 Inductive exec (T: Type) : mem -> prog T -> outcome T -> Prop :=
 | XStep : forall m m' p p' out, step m p m' p' ->
   exec m' p' out ->
   exec m p out
-| XFail : forall m p, (~exists m' p', step m p m' p') -> (~exists r, p = Done r) ->
+| XFail : forall m p, (~exists m' p', step m p m' p') ->
+  (~exists r, p = Done r) ->
+  (~exists sz (buf : word sz) rx, p = Hash buf rx) ->
   exec m p (Failed T)
 | XCrash : forall m p, exec m p (Crashed T m)
 | XDone : forall m v, exec m (Done v) (Finished m v).
