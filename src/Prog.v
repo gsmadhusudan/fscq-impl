@@ -251,6 +251,11 @@ Proof.
   rewrite valulen_is; auto.
 Qed.
 
+Lemma hashlen_valulen: hashlen + (valulen - hashlen) = valulen.
+Proof.
+  rewrite valulen_is; auto.
+Qed.
+
 Definition addr2valu (a: addr) : valu.
   set (zext a (valulen-addrlen)) as r.
   rewrite addrlen_valulen in r.
@@ -288,6 +293,12 @@ Proof.
   apply combine_inj in H.
   intuition.
 Qed.
+
+Definition hash_to_valu (h: word hashlen) : valu.
+  set (zext h (valulen-hashlen)) as r.
+  rewrite hashlen_valulen in r.
+  apply r.
+Defined.
 
 
 Global Opaque addr2valu.
