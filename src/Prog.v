@@ -300,6 +300,19 @@ Definition hash_to_valu (h: word hashlen) : valu.
   apply r.
 Defined.
 
+Lemma hash_to_valu_inj : forall a b,
+  hash_to_valu a = hash_to_valu b ->
+  a = b.
+  unfold hash_to_valu.
+  unfold eq_rec_r, eq_rec.
+  rewrite <- hashlen_valulen.
+  intros.
+  rewrite <- (eq_rect_eq_dec eq_nat_dec) in H.
+  rewrite <- (eq_rect_eq_dec eq_nat_dec) in H.
+  unfold zext in *.
+  apply combine_inj in H.
+  intuition.
+Qed.
 
 Global Opaque addr2valu.
 Global Opaque valu2addr.
