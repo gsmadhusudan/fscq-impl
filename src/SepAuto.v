@@ -848,7 +848,6 @@ Ltac cancel_with t :=
       | [ |- _ =p=> _ ] => cancel'
       end;
   intuition;
-  try eauto;
   try ( pred_apply; cancel_with t );
   try congruence;
   try t;
