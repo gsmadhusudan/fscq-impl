@@ -108,13 +108,61 @@ Qed.
 Definition wringaddr := wring addrlen.
 Add Ring wringaddr : wringaddr (decidable (weqb_sound addrlen), constants [wcst]).
 
+
+(* A hashmap holds all keys that Hash has been called on, maps hash values to keys. *)
+Inductive hashmap : Type :=
+  | empty_hashmap : hashmap
+  | upd_hashmap : hashmap -> word hashlen -> { sz : nat & word sz } -> hashmap.
+
+Parameter hash_fwd : forall sz, word sz -> word hashlen.
+Definition default_valu : valu := $0.
+Definition default_hash := hash_fwd default_valu.
+
+Definition upd_hashmap' hm h sz k : hashmap :=
+  upd_hashmap hm h (existT _ sz k).
+
+Fixpoint hashmap_get hm h : option {sz : nat & word sz} :=
+  if (weq h default_hash)
+    then Some (existT _ _ default_valu) else
+    (match hm with
+    | empty_hashmap => None
+    | upd_hashmap hm' h' k' =>  if (weq h' h)
+                                then Some k'
+                                else hashmap_get hm' h
+    end).
+
+
+Lemma upd_hashmap_eq : forall hm h k,
+  h <> default_hash ->
+  hashmap_get (upd_hashmap hm h k) h = Some k.
+Proof.
+  intros.
+  unfold hashmap_get.
+  destruct (weq h default_hash);
+  destruct (weq h h); intuition.
+Qed.
+
+Lemma upd_hashmap'_eq : forall hm h sz k,
+  h <> default_hash ->
+  hashmap_get (upd_hashmap' hm h k) h = Some (existT _ sz k).
+Proof.
+  intros.
+  unfold upd_hashmap'.
+  apply upd_hashmap_eq; auto.
+Qed.
+
+Hint Rewrite upd_hashmap_eq.
+
+Definition hash_safe hm h sz (k : word sz) :=
+  hashmap_get hm h = None \/ hashmap_get hm h = Some (existT _ _ k).
+
 Inductive prog (T: Type) :=
 | Done (v: T)
 | Read (a: addr) (rx: valu -> prog T)
 | Write (a: addr) (v: valu) (rx: unit -> prog T)
 | Sync (a: addr) (rx: unit -> prog T)
 | Trim (a: addr) (rx: unit -> prog T)
-| Hash (sz: nat) (buf: word sz) (rx: word hashlen -> prog T).
+| Hash (sz: nat) (buf: word sz) (hm: hashmap) (rx: (word hashlen * (hashmap * unit)) -> prog T).
 
 Definition progseq (A B:Type) (a:B->A) (b:B) := a b.
 Definition pair_args_helper (A B C:Type) (f: A->B->C) (x: A*B) := f (fst x) (snd x).
@@ -147,9 +195,6 @@ Inductive outcome (T: Type) :=
 | Finished (m: @mem addr (@weq addrlen) valuset) (v: T)
 | Crashed (m: @mem addr (@weq addrlen) valuset).
 
-Parameter hash_inv : word hashlen -> {sz: nat & word sz}.
-Parameter hash_fwd : forall sz, word sz -> word hashlen.
-
 
 Inductive step (T: Type) : @mem _ (@weq addrlen) _ -> prog T ->
                            @mem _ (@weq addrlen) _ -> prog T -> Prop :=
@@ -161,9 +206,10 @@ Inductive step (T: Type) : @mem _ (@weq addrlen) _ -> prog T ->
   step m (Sync a rx) (upd m a (v, nil)) (rx tt)
 | StepTrim : forall m a rx vs vs', m a = Some vs ->
   step m (Trim a rx) (upd m a vs') (rx tt)
-| StepHash : forall m sz buf rx h, hash_inv h = existT _ sz buf ->
+| StepHash : forall m sz (buf : word sz) rx h hm,
+  hash_safe hm h buf ->
   hash_fwd buf = h ->
-  step m (Hash buf rx) m (rx h).
+  step m (Hash buf hm rx) m (rx (h, (upd_hashmap' hm h buf, tt))).
 
 Inductive exec (T: Type) : mem -> prog T -> outcome T -> Prop :=
 | XStep : forall m m' p p' out, step m p m' p' ->
@@ -171,7 +217,7 @@ Inductive exec (T: Type) : mem -> prog T -> outcome T -> Prop :=
   exec m p out
 | XFail : forall m p, (~exists m' p', step m p m' p') ->
   (~exists r, p = Done r) ->
-  (~exists sz (buf : word sz) rx, p = Hash buf rx) ->
+  (~exists sz (buf : word sz) hm rx, p = Hash buf hm rx) ->
   exec m p (Failed T)
 | XCrash : forall m p, exec m p (Crashed T m)
 | XDone : forall m v, exec m (Done v) (Finished m v).
