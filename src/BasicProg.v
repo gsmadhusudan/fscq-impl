@@ -46,7 +46,7 @@ Theorem read_ok:
   CRASH      a |-> v
   >} Read a.
 Proof.
-  unfold corr2'; intros.
+  unfold corr2; intros.
   destruct_lift H.
   inv_exec.
   - inv_step.
@@ -74,7 +74,7 @@ Theorem write_ok:
   CRASH      a |-> v0
   >} Write a v.
 Proof.
-  unfold corr2'; intros.
+  unfold corr2; intros.
   destruct_lift H.
   inv_exec.
   - inv_step.
@@ -103,7 +103,7 @@ Theorem sync_ok:
   CRASH      a |-> v
   >} Sync a.
 Proof.
-  unfold corr2'; intros.
+  unfold corr2; intros.
   destruct_lift H.
   inv_exec.
   - inv_step.
@@ -132,7 +132,7 @@ Theorem trim_ok:
   CRASH      a |->?
   >} Trim a.
 Proof.
-  unfold corr2'; intros.
+  unfold corr2; intros.
   destruct_lift H.
   inv_exec.
   - inv_step.
@@ -171,7 +171,7 @@ Theorem hash_ok:
   CRASH:hm' emp * [[ hm' = hm ]]
   >}} Hash buf.
 Proof.
-  unfold corr2'; intros.
+  unfold corr2; intros.
   destruct_lift H.
   inv_exec.
   - inv_step.
@@ -195,12 +195,12 @@ Definition If_ {PROGTYPE : Type -> Type} {T : Type} P Q (b : {P} + {Q}) (p1 p2 :
 
 Theorem if_ok:
   forall T P Q (b : {P}+{Q}) (p1 p2 : prog T),
-  {{ fun done crash => exists pre, pre
-   * [[ {{ fun done' crash' => pre * [[P]] * [[ done' = done ]] * [[ crash' = crash ]] }} p1 ]]
-   * [[ {{ fun done' crash' => pre * [[Q]] * [[ done' = done ]] * [[ crash' = crash ]] }} p2 ]]
+  {{ fun hm done crash => exists pre, pre
+   * [[ {{ fun hm' done' crash' => pre * [[P]] * [[ done' = done ]] * [[ crash' = crash ]] }} p1 ]]
+   * [[ {{ fun hm' done' crash' => pre * [[Q]] * [[ done' = done ]] * [[ crash' = crash ]] }} p2 ]]
   }} If_ b p1 p2.
 Proof.
-  unfold corr2, corr2', exis; intros; repeat deex.
+  unfold corr2, corr2, exis; intros; repeat deex.
   repeat ( apply sep_star_lift2and in H; destruct H ).
   destruct b.
   - eapply H2; eauto.
@@ -220,9 +220,9 @@ Definition IfRx_ {PROGTYPE : Type -> Type} {T : Type} P Q R (b : {P} + {Q})
 
 Theorem ifrx_ok:
   forall T P Q R (b : {P}+{Q}) (p1 p2 : (R -> prog T) -> prog T) rx,
-  {{ fun done crash => exists pre, pre
-   * [[ {{ fun done' crash' => pre * [[P]] * [[ done' = done ]] * [[ crash' = crash ]] }} p1 rx ]]
-   * [[ {{ fun done' crash' => pre * [[Q]] * [[ done' = done ]] * [[ crash' = crash ]] }} p2 rx ]]
+  {{ fun hm done crash => exists pre, pre
+   * [[ {{ fun hm' done' crash' => pre * [[P]] * [[ done' = done ]] * [[ crash' = crash ]] }} p1 rx ]]
+   * [[ {{ fun hm' done' crash' => pre * [[Q]] * [[ done' = done ]] * [[ crash' = crash ]] }} p2 rx ]]
   }} IfRx_ b p1 p2 rx.
 Proof.
   unfold IfRx_; intros.
@@ -334,17 +334,17 @@ Theorem for_ok':
          (nocrash : G -> addr -> L -> pred)
          (crashed : G -> pred)
          (li : L),
-  {{ fun done crash => exists F (g:G), F * nocrash g i li
+  {{ fun hm done crash => exists F (g:G), F * nocrash g i li
    * [[forall m lm rxm,
       (i <= m)%word ->
       (m < n ^+ i)%word ->
       (forall lSm,
-       {{ fun done' crash' => F * nocrash g (m ^+ $1) lSm * [[ done' = done ]] * [[ crash' = crash ]]
+       {{ fun hm' done' crash' => F * nocrash g (m ^+ $1) lSm * [[ done' = done ]] * [[ crash' = crash ]]
        }} rxm lSm) ->
-      {{ fun done' crash' => F * nocrash g m lm * [[ done' = done ]] * [[ crash' = crash ]]
+      {{ fun hm' done' crash' => F * nocrash g m lm * [[ done' = done ]] * [[ crash' = crash ]]
       }} f m lm rxm]]
    * [[forall lfinal,
-       {{ fun done' crash' => F * nocrash g (n ^+ i) lfinal * [[ done' = done ]] * [[ crash' = crash ]]
+       {{ fun hm' done' crash' => F * nocrash g (n ^+ i) lfinal * [[ done' = done ]] * [[ crash' = crash ]]
        }} rx lfinal]]
    * [[wordToNat i + wordToNat n = wordToNat (i ^+ n)]]
    * [[F * crashed g =p=> crash]]
@@ -451,16 +451,16 @@ Theorem for_ok:
          (nocrash : G -> addr -> L -> pred)
          (crashed : G -> pred)
          (li : L),
-  {{ fun done crash => exists F (g:G), F * nocrash g $0 li
+  {{ fun hm done crash => exists F (g:G), F * nocrash g $0 li
    * [[forall m lm rxm,
       (m < n)%word ->
       (forall lSm,
-       {{ fun done' crash' => F * nocrash g (m ^+ $1) lSm * [[ done' = done ]] * [[ crash' = crash ]]
+       {{ fun hm' done' crash' => F * nocrash g (m ^+ $1) lSm * [[ done' = done ]] * [[ crash' = crash ]]
        }} rxm lSm) ->
-      {{ fun done' crash' => F * nocrash g m lm * [[ done' = done ]] * [[ crash' = crash ]]
+      {{ fun hm' done' crash' => F * nocrash g m lm * [[ done' = done ]] * [[ crash' = crash ]]
       }} f m lm rxm]]
    * [[forall lfinal,
-       {{ fun done' crash' => F * nocrash g n lfinal * [[ done' = done ]] * [[ crash' = crash ]]
+       {{ fun hm' done' crash' => F * nocrash g n lfinal * [[ done' = done ]] * [[ crash' = crash ]]
        }} rx lfinal]]
    * [[F * crashed g =p=> crash]]
   }} For_ f $0 n nocrash crashed li rx.
@@ -517,17 +517,17 @@ Theorem foreach_ok:
          (nocrash : G -> list ITEM -> L -> pred)
          (crashed : G -> pred)
          (li : L),
-  {{ fun done crash => exists F (g:G), F * nocrash g lst li
+  {{ fun hm done crash => exists F (g:G), F * nocrash g lst li
    * [[forall elem lst' lm rxm,
       (forall lSm,
-       {{ fun done' crash' => F * nocrash g lst' lSm * [[ done' = done ]] * [[ crash' = crash ]]
+       {{ fun hm' done' crash' => F * nocrash g lst' lSm * [[ done' = done ]] * [[ crash' = crash ]]
        }} rxm lSm) ->
-      {{ fun done' crash' => F * nocrash g (elem :: lst') lm *
+      {{ fun hm' done' crash' => F * nocrash g (elem :: lst') lm *
          [[ exists prefix, prefix ++ elem :: lst' = lst ]] *
          [[ done' = done ]] * [[ crash' = crash ]]
       }} f elem lm rxm]]
    * [[forall lfinal,
-       {{ fun done' crash' => F * nocrash g nil lfinal * [[ done' = done ]] * [[ crash' = crash ]]
+       {{ fun hm' done' crash' => F * nocrash g nil lfinal * [[ done' = done ]] * [[ crash' = crash ]]
        }} rx lfinal]]
    * [[F * crashed g =p=> crash]]
   }} ForEach_ f lst nocrash crashed li rx.

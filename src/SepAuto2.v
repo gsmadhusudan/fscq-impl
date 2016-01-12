@@ -811,8 +811,8 @@ end.
 
 Theorem nop_ok :
   forall T A v (rx : A -> prog T),
-  {{ fun done_ crash_ => exists F, F * [[ forall r_,
-    {{ fun done' crash' => (fun r => F * [[ r = v ]]) r_ *
+  {{ fun hm done_ crash_ => exists F, F * [[ forall r_,
+    {{ fun hm' done' crash' => (fun r => F * [[ r = v ]]) r_ *
                            [[ done' = done_ ]] * [[ crash' = crash_ ]]}}
      rx r_ ]] * [[ F =p=> crash_]] }} rx v.
 Proof.
