@@ -1788,9 +1788,9 @@ Local Hint Extern 0 (okToUnify (array _ _ _) (array _ _ _)) => constructor : okT
 
 Theorem read_ok:
   forall T (a i stride:addr) (rx:valu->prog T),
-  {{ fun done crash => exists vs F, array a vs stride * F
+  {{ fun hm done crash => exists vs F, array a vs stride * F
    * [[wordToNat i < length vs]]
-   * [[{{ fun done' crash' => array a vs stride * F * [[ done' = done ]] * [[ crash' = crash ]]
+   * [[{{ fun hm done' crash' => array a vs stride * F * [[ done' = done ]] * [[ crash' = crash ]]
        }} rx (fst (sel vs i ($0, nil)))]]
    * [[array a vs stride * F =p=> crash]]
   }} ArrayRead a i stride rx.
@@ -1804,9 +1804,9 @@ Qed.
 
 Theorem write_ok:
   forall T (a i stride:addr) (v:valu) (rx:unit->prog T),
-  {{ fun done crash => exists vs F, array a vs stride * F
+  {{ fun hm done crash => exists vs F, array a vs stride * F
    * [[wordToNat i < length vs]]
-   * [[{{ fun done' crash' => array a (upd_prepend vs i v) stride * F
+   * [[{{ fun hm done' crash' => array a (upd_prepend vs i v) stride * F
         * [[ done' = done ]] * [[ crash' = crash ]]
        }} rx tt]]
    * [[ array a vs stride * F =p=> crash ]]
@@ -1820,9 +1820,9 @@ Qed.
 
 Theorem sync_ok:
   forall T (a i stride:addr) (rx:unit->prog T),
-  {{ fun done crash => exists vs F, array a vs stride * F
+  {{ fun hm done crash => exists vs F, array a vs stride * F
    * [[wordToNat i < length vs]]
-   * [[{{ fun done' crash' => array a (upd_sync vs i ($0, nil)) stride * F
+   * [[{{ fun hm done' crash' => array a (upd_sync vs i ($0, nil)) stride * F
         * [[ done' = done ]] * [[ crash' = crash ]]
        }} rx tt]]
    * [[ array a vs stride * F =p=> crash ]]
@@ -1848,9 +1848,9 @@ Definition read_back T a rx : prog T :=
 Ltac unfold_prepend := unfold upd_prepend.
 
 Theorem read_back_ok : forall T a (rx : _ -> prog T),
-  {{ fun done crash => exists vs F, array a vs $1 * F
+  {{ fun hm done crash => exists vs F, array a vs $1 * F
      * [[length vs > 0]]
-     * [[{{fun done' crash' => array a (upd_prepend vs $0 $42) $1 * F
+     * [[{{fun hm done' crash' => array a (upd_prepend vs $0 $42) $1 * F
           * [[ done' = done ]] * [[ crash' = crash ]]
          }} rx $42 ]]
      * [[ array a vs $1 * F \/
@@ -1868,10 +1868,10 @@ Definition swap T a i j rx : prog T :=
   rx.
 
 Theorem swap_ok : forall T a i j (rx : prog T),
-  {{ fun done crash => exists vs F, array a vs $1 * F
+  {{ fun hm done crash => exists vs F, array a vs $1 * F
      * [[wordToNat i < length vs]]
      * [[wordToNat j < length vs]]
-     * [[{{fun done' crash' => array a (upd_prepend (upd_prepend vs i (fst (sel vs j ($0, nil)))) j (fst (sel vs i ($0, nil)))) $1 * F
+     * [[{{fun hm done' crash' => array a (upd_prepend (upd_prepend vs i (fst (sel vs j ($0, nil)))) j (fst (sel vs i ($0, nil)))) $1 * F
            * [[ done' = done ]] * [[ crash' = crash ]]
          }} rx ]]
      * [[ array a vs $1 * F \/

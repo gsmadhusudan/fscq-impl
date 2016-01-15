@@ -1341,7 +1341,7 @@ Module LOG.
     omega.
 
     step.
-    instantiate (a5 := List.combine (skipn # m1 (map snd (Map.elements ms))) l4).
+    instantiate (a7 := List.combine (skipn # m1 (map snd (Map.elements ms))) l4).
     cancel.
     solve_lengths.
 
