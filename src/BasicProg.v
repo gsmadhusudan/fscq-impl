@@ -181,11 +181,13 @@ Proof.
       pose proof (eq_sigT_snd H5).
       autorewrite with core in *. congruence.
     cancel.
+    eexists. econstructor. econstructor. eauto.
   - exfalso.
     apply H5. repeat eexists.
   - right. repeat eexists; intuition eauto.
     eapply H3.
     pred_apply; cancel.
+    eexists. econstructor.
 Qed.
 
 Hint Extern 1 ({{_}} progseq (Hash _) _) => apply hash_ok : prog.
@@ -196,8 +198,8 @@ Definition If_ {PROGTYPE : Type -> Type} {T : Type} P Q (b : {P} + {Q}) (p1 p2 :
 Theorem if_ok:
   forall T P Q (b : {P}+{Q}) (p1 p2 : prog T),
   {{ fun hm done crash => exists pre, pre
-   * [[ {{ fun hm' done' crash' => pre * [[P]] * [[ done' = done ]] * [[ crash' = crash ]] }} p1 ]]
-   * [[ {{ fun hm' done' crash' => pre * [[Q]] * [[ done' = done ]] * [[ crash' = crash ]] }} p2 ]]
+   * [[ {{ fun hm' done' crash' => pre * [[P]] * [[ hm = hm' ]] * [[ done' = done ]] * [[ crash' = crash ]] }} p1 ]]
+   * [[ {{ fun hm' done' crash' => pre * [[Q]] * [[ hm = hm' ]] * [[ done' = done ]] * [[ crash' = crash ]] }} p2 ]]
   }} If_ b p1 p2.
 Proof.
   unfold corr2, corr2, exis; intros; repeat deex.
@@ -221,8 +223,8 @@ Definition IfRx_ {PROGTYPE : Type -> Type} {T : Type} P Q R (b : {P} + {Q})
 Theorem ifrx_ok:
   forall T P Q R (b : {P}+{Q}) (p1 p2 : (R -> prog T) -> prog T) rx,
   {{ fun hm done crash => exists pre, pre
-   * [[ {{ fun hm' done' crash' => pre * [[P]] * [[ done' = done ]] * [[ crash' = crash ]] }} p1 rx ]]
-   * [[ {{ fun hm' done' crash' => pre * [[Q]] * [[ done' = done ]] * [[ crash' = crash ]] }} p2 rx ]]
+   * [[ {{ fun hm' done' crash' => pre * [[P]] * [[ hm = hm' ]] * [[ done' = done ]] * [[ crash' = crash ]] }} p1 rx ]]
+   * [[ {{ fun hm' done' crash' => pre * [[Q]] * [[ hm = hm' ]] * [[ done' = done ]] * [[ crash' = crash ]] }} p2 rx ]]
   }} IfRx_ b p1 p2 rx.
 Proof.
   unfold IfRx_; intros.
@@ -444,6 +446,7 @@ Proof.
     + cancel.
 Qed.
 
+(* TODO: Add propositions about hm' vs hm *)
 Theorem for_ok:
   forall T (n : addr)
          (L : Type) (G : Type)
