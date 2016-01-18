@@ -5,6 +5,7 @@ Require Import Prog.
 Require Import Pred PredCrash.
 Require Import Hoare.
 Require Import Word.
+Require Import Hashmap.
 
 Set Implicit Arguments.
 
@@ -851,6 +852,7 @@ Ltac cancel_with t :=
   intuition;
   try ( pred_apply; cancel_with t );
   try congruence;
+  try solve_hashmap_subset;
   try t;
   unfold stars; simpl; inv_option_eq;
   try match goal with
