@@ -337,9 +337,8 @@ Section RECARRAY.
     apply wlt_lt in H. congruence.
 
     eapply pimpl_ok2; eauto with prog.
-    intros; norm. cancel.
-    intuition.
-    pred_apply; unfold array_item, array_item_pairs; norm.
+    cancel.
+    unfold array_item, array_item_pairs; norm.
     instantiate (a := (upd l0 m0 (valu_to_block $0))).
     rewrite map_upd. rewrite valu_rep_id. cancel.
     intuition.
@@ -352,7 +351,7 @@ Section RECARRAY.
     unfold upd. apply wlt_lt in H.
     replace (# (m0 ^+ $1)) with (# (m0) + 1) in *.
     erewrite init_helper; eauto.
-    rewrite <- H14 in H. auto.
+    rewrite <- H15 in H. auto.
     rewrite wplus_alt. unfold wplusN, wordBinN. simpl.
     rewrite wordToNat_natToWord_bound with (bound:=RALen xp); auto.
     omega.
@@ -367,13 +366,13 @@ Section RECARRAY.
     apply LOG.activetxn_would_recover_old.
 
     eapply pimpl_ok2; eauto with prog.
-    intros; norm.
-    cancel.
+    intros; norm. cancel.
     instantiate (a0 := l0). intuition.
     rewrite Forall_forall; intros.
 
-    eapply In_nth in H. destruct H as [inidx H']; destruct H' as [Hlen Hnth].
-    rewrite <- Hnth. rewrite <- nth_selN_eq. apply H10. rewrite <- H9. auto.
+    eapply In_nth in H0. destruct H0 as [inidx H']; destruct H' as [Hlen Hnth].
+    rewrite <- Hnth. rewrite <- nth_selN_eq. apply H11. rewrite <- H10. auto.
+    eauto.
   Qed.
 
   (** Get the [pos]'th item in the [block_ix]'th block *)
@@ -522,7 +521,7 @@ Section RECARRAY.
     unfold array_item_pairs in H0. unfold rep_block in H0.
     destruct_lift H0.
     apply nested_sel_divmod_concat; auto.
-    eapply Forall_impl; [ | apply H8 ].
+    eapply Forall_impl; [ | apply H9 ].
     intro a. simpl. tauto.
   Qed.
 

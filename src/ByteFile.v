@@ -195,7 +195,7 @@ Module BYTEFILE.
     apply firstn_length_l_iff; auto.
 
     step.
-    rewrite H15.
+    rewrite H17.
     rewrite <- firstn_double_skipn
       with (len2 := # (INODE.ISize (BFILE.BFAttr f)))
       by omega.
@@ -215,7 +215,7 @@ Module BYTEFILE.
     apply firstn_length_l_iff; auto.
 
     step.
-    rewrite H15.
+    rewrite H17.
     rewrite <- firstn_double_skipn
       with (len2 := # (INODE.ISize (BFILE.BFAttr f)))
       by omega.

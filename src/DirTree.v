@@ -776,7 +776,7 @@ Module DIRTREE.
     step.
     do 2 eexists; intuition; eauto.
     pred_apply; cancel.
-    pred_apply' H0; cancel.
+    pred_apply' H5; cancel.
     destruct a0.
 
     (* dslookup = Some _: extract subtree before [cancel] *)
@@ -1264,6 +1264,7 @@ Module DIRTREE.
     rewrite dirlist_pred_except_delete; eauto.
     cancel.
     step.
+    cancel.
   Qed.
 
   Theorem delete_ok : forall fsxp dnum name mscs,
@@ -1850,7 +1851,7 @@ Module DIRTREE.
     (* case 1: dst exists, try delete *)
     eapply pimpl_ok2. apply delete_ok. intros; norm'l.
     split_or_l; [ unfold stars; simpl; norm'l; inv_option_eq | step ].
-    hypmatch (tree_dir_names_pred' l0 dsmap1) as Hx3.
+    hypmatch (tree_dir_names_pred' l3 dsmap1) as Hx3.
     hypmatch ((a12, a13)) as Hx4.
     pose proof (ptsto_subtree_exists _ Hx3 Hx4) as Hx.
     destruct Hx; intuition.
@@ -1882,6 +1883,7 @@ Module DIRTREE.
 
     (* dst is None *)
     step.
+    step.
     do 2 eexists; intuition.
     pred_apply; cancel.
     pred_apply' Hdst; cancel.
@@ -1890,6 +1892,9 @@ Module DIRTREE.
     step.
     apply pimpl_or_r; right; cancel; eauto.
     eapply subtree_graft_absorb; eauto.
+
+    cancel.
+    cancel.
 
     Grab Existential Variables.
     all: eauto.

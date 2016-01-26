@@ -375,7 +375,6 @@ Module DIR.
     unfold dfold.
     hoare.
 
-    subst. do 2 eexists. intuition eauto.
     apply LOG.activetxn_would_recover_old.
 
     Grab Existential Variables.
@@ -979,7 +978,7 @@ Module DIR.
     apply mem_except_notindomain.
 
     unfold pimpl; intros m1 Hx.
-    pose proof (dlookup_ptsto _ Horig H0 m1 Hx).
+    pose proof (dlookup_ptsto _ Horig H6 m1 Hx).
     eapply sep_star_ptsto_indomain.
     pred_apply; cancel.
 

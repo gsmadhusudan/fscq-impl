@@ -182,7 +182,7 @@ Module BALLOC.
     hoare.
     apply pimpl_or_r; right.
     cancel.
-    rewrite <- H9. unfold bmap_bits, sel.
+    rewrite <- H12. unfold bmap_bits, sel.
     autorewrite with core; auto.
     word2nat_auto.
     erewrite upd_bmap_bits; trivial.
@@ -233,9 +233,9 @@ Module BALLOC.
 
     intros.
     rewrite selN_map with (default' := 0). simpl.
-    rewrite Forall_forall in H9.
-    pose proof (@in_selN _ pos l $0 H).
-    apply H9 in H0. rewrite H0. reflexivity.
+    rewrite Forall_forall in H10.
+    pose proof (@in_selN _ pos l $0 H0) as H0'.
+    apply H10 in H0'. rewrite H0'. reflexivity.
     rewrite seq_length.
     unfold items_per_valu in *. rewrite valulen_wordToNat_natToWord in *. congruence.
   Qed.
@@ -352,13 +352,13 @@ Module BALLOC.
 
     step.
     subst; apply fupd_same; trivial.
-    rewrite H10 in H3.
+    rewrite H10 in H5.
     destruct (weq bn a1).
     subst; apply fupd_same; trivial.
-    rewrite <- H3; apply fupd_other; assumption.
+    rewrite <- H5; apply fupd_other; assumption.
     destruct (weq bn a1).
     left. trivial.
-    right. rewrite fupd_other in H0 by assumption. apply H10; assumption.
+    right. rewrite fupd_other in H3 by assumption. apply H10; assumption.
   Qed.
 
   Hint Extern 1 ({{_}} progseq (BALLOC.alloc_gen _ _ _) _) => apply BALLOC.alloc_gen_ok : prog.
@@ -389,7 +389,7 @@ Module BALLOC.
     eapply pimpl_ok2. apply alloc_gen_ok.
     cancel.
     step.
-    rewrite H10 in H7.
+    rewrite H9 in H6.
     apply pimpl_or_r. right.
     cancel.
   Qed.

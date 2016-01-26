@@ -135,7 +135,7 @@ Proof.
   cancel.
 
   pimpl_crash. norm'l; unfold stars; simpl. autorewrite with crash_xform.
-  norm. cancel. intuition.
+  cancel. unfold pimpl; intros.
   eapply pred_apply_crash_xform_pimpl; eauto.
   autorewrite with crash_xform.
   rewrite LOG.after_crash_pred'_would_recover_either_pred'.

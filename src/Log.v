@@ -940,9 +940,9 @@ Module LOG.
     eauto.
 
     intro.
-    hnf in H4.
-    destruct H4.
-    apply Map.find_1 in H4.
+    hnf in H5.
+    destruct H5.
+    apply Map.find_1 in H5.
     congruence.
   Qed.
 
@@ -1244,7 +1244,7 @@ Module LOG.
     repeat erewrite selN_map by solve_lengths.
     rewrite <- surjective_pairing.
     rewrite selN_app2.
-    rewrite H21.
+    rewrite H22.
     rewrite Nat.sub_diag.
     reflexivity.
     abstract solve_lengths.
@@ -1286,6 +1286,7 @@ Module LOG.
     abstract solve_lengths.
     intuition.
     abstract solve_lengths.
+    solve_hashmap.
     or_l. cancel.
     rewrite firstn_oob by solve_lengths.
     array_match.
@@ -1341,7 +1342,7 @@ Module LOG.
     omega.
 
     step.
-    instantiate (a7 := List.combine (skipn # m1 (map snd (Map.elements ms))) l4).
+    instantiate (a5 := List.combine (skipn # m1 (map snd (Map.elements ms))) l5).
     cancel.
     solve_lengths.
 
