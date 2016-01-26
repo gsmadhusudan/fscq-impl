@@ -2006,7 +2006,7 @@ Module LOG.
   Proof.
     unfold apply_unsync; log_unfold.
 
-    step.
+    step_idtac; eauto.
     eapply valid_entries_replay'; eauto.
     apply equal_unless_in_replay_eq.
     pose proof (replay_twice) as Hx; unfold replay at 2 in Hx.
@@ -2057,7 +2057,7 @@ Module LOG.
     destruct_lift Hx; replace (length l) with (length l2); auto.
     abstract solve_equal_unless_in_length.
 
-    step.
+    step_idtac; eauto.
     apply equal_arrays; auto.
     rewrite <- combine_map_fst_snd at 1.
     f_equal.
@@ -2206,7 +2206,7 @@ Module LOG.
     eapply nil_unless_in_S; eauto.
 
     step.
-    step.
+    step_idtac.
 
     apply equal_arrays; auto; f_equal.
     eapply nil_unless_in_oob; eauto.
@@ -2494,9 +2494,8 @@ Module LOG.
     rec_simpl.
     simpl.
     solve_lengths.
-    eauto with replay.
-    cancel.
-    auto.
+    cancel_with eauto.
+    cancel_with auto.
     Unshelve.
     repeat constructor. exact $0.
   Qed.
