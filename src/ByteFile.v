@@ -296,7 +296,7 @@ Module BYTEFILE.
         replace (BFILE.BFAttr f').
         auto.
       * replace (BFILE.BFAttr f').
-        apply firstn_length_l_iff in H10.
+        apply firstn_length_l_iff in H11.
         match goal with
         | [ H : _ (list2nmem ilist') |- _ ] => rename H into Hilist'
         end.
@@ -453,8 +453,8 @@ Module BYTEFILE.
      assert (ilist' =
       firstn (filelen f) allbytes ++
       repeat $ (0) (roundup newlen valubytes - filelen f)) as Hilist'.
-     eapply pimpl_apply in H25.
-     eapply list2nmem_array_eq in H25.
+     eapply pimpl_apply in H28.
+     eapply list2nmem_array_eq in H28.
      replace ilist'.
      reflexivity.
      rewrite Rec.of_word_zero_list.

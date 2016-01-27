@@ -2114,7 +2114,7 @@ Section RECBFILE.
       eapply goodSize_trans; eauto.
       eapply goodSize_bound.
       eapply bfrec_bound; eauto.
-      rewrite <- H0.
+      rewrite <- H10.
       apply in_app_middle.
       eapply Nat.le_trans.
       apply divup_mono; eauto.
@@ -2123,9 +2123,6 @@ Section RECBFILE.
       replace (length ilist).
       erewrite <- array_items_num_blocks by eauto.
       auto.
-    - subst.
-      rewrite <- H17.
-      apply apply_chunks_cons.
     - Transparent hidden.
       unfold hidden in *.
       subst newdata.
@@ -2151,7 +2148,7 @@ Section RECBFILE.
       now omega.
 
       rewrite Rec.to_of_id.
-      rewrite <- H15.
+      rewrite <- H16.
       reflexivity.
     - apply LOG.activetxn_would_recover_old.
 
@@ -2452,7 +2449,7 @@ Section RECBFILE.
     erewrite arrayN_except with (i := #block_ix); rec_bounds.
     erewrite arrayN_except with (i := #block_ix); rec_bounds.
 
-    subst; simpl in *. pred_apply.
+    subst; simpl in *.
 
     rewrite Rec.word_updN_equiv by rec_bounds.
     unfold sel, upd; autorewrite with core.
@@ -2465,6 +2462,7 @@ Section RECBFILE.
        apply in_selN; rec_bounds.
     cancel.
 
+    unfold sel, upd; autorewrite with core.
     assert (Hx := H13).
     apply Forall_upd; auto.
     rewrite Forall_forall in Hx.
@@ -2474,6 +2472,9 @@ Section RECBFILE.
     apply Hx; apply in_sel; rec_bounds.
     apply Forall_upd; auto.
     apply Hx; apply in_sel; rec_bounds.
+
+    Grab Existential Variables.
+    all: auto.
   Qed.
 
 

@@ -2369,22 +2369,22 @@ Module LOG.
     hoare_with log_unfold ltac:(eauto with replay).
     + or_l.
       cancel_with ltac:(eauto with replay).
-      apply Map.is_empty_2 in H10.
+      apply Map.is_empty_2 in H11.
       unfold replay, replay'.
       destruct (MapProperties.elements_Empty m) as [He ?].
       rewrite He by auto.
       auto.
-      apply Map.is_empty_2 in H10.
+      apply Map.is_empty_2 in H11.
       pose proof (@Map.empty_1 valu).
       unfold ms_empty.
       hnf. intros.
-      hnf in H10.
+      hnf in H11.
       eapply eq_trans.
       apply MapFacts.not_find_in_iff.
       intro Hi.
       hnf in Hi.
       destruct Hi as [v ?].
-      eapply H10; eauto.
+      eapply H11; eauto.
       apply eq_sym.
       apply MapFacts.not_find_in_iff.
       intro Hi.
@@ -2398,11 +2398,11 @@ Module LOG.
       congruence.
     + or_r; or_r; or_r; or_r; or_r; or_r; or_r.
       or_l. cancel. cancel.
-      rewrite H18. cancel.
+      rewrite H19. cancel.
       eauto.
       congruence.
     + repeat or_r. cancel.
-      rewrite H18. cancel.
+      rewrite H19. cancel.
       eauto.
     + or_r. or_l.
       unfold avail_region.
