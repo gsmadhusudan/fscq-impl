@@ -885,7 +885,7 @@ Module LOG.
     | Some v =>
       rx ^(^(ms, cs), v)
     | None =>
-      let^ (cs, v) <- BUFCACHE.read_array (DataStart xp) a cs;
+      let^ (cs, v) <- BUFCACHE.read_array (DataStart xp) a $1 cs;
       rx ^(^(ms, cs), v)
     end.
 
@@ -966,7 +966,7 @@ Module LOG.
           * avail_region (LogData xp ^+ i) (# (LogLen xp) - # i))%pred d' ]]
     OnCrash crash
     Begin
-      cs <- BUFCACHE.write_array (LogData xp ^+ i) $0
+      cs <- BUFCACHE.write_array (LogData xp ^+ i) $0 $1
         (sel (map snd (Map.elements ms)) i $0) cs;
       lrx ^(cs)
     Rof ^(cs);
@@ -994,7 +994,7 @@ Module LOG.
           * avail_region (LogData xp ^+ $ (Map.cardinal ms)) (# (LogLen xp) - Map.cardinal ms))%pred d' ]]
     OnCrash crash
     Begin
-      cs <- BUFCACHE.sync_array (LogData xp ^+ i) $0 cs;
+      cs <- BUFCACHE.sync_array (LogData xp ^+ i) $0 $1 cs;
       lrx ^(cs)
     Rof ^(cs);
     rx ^(ms, cs).
@@ -1989,7 +1989,7 @@ Module LOG.
       exists mscs', rep xp F (CommittedTxn cur) mscs'
     Begin
       cs <- BUFCACHE.write_array (DataStart xp)
-        (sel (map fst (Map.elements ms)) i $0) (sel (map snd (Map.elements ms)) i $0) cs;
+        (sel (map fst (Map.elements ms)) i $0) $1 (sel (map snd (Map.elements ms)) i $0) cs;
       lrx ^(cs)
     Rof ^(cs);
     rx ^(ms, cs).
@@ -2086,7 +2086,7 @@ Module LOG.
     OnCrash
       exists mscs', rep xp F (AppliedUnsyncTxn cur) mscs'
     Begin
-      cs <- BUFCACHE.sync_array (DataStart xp) (sel (map fst (Map.elements ms)) i $0) cs;
+      cs <- BUFCACHE.sync_array (DataStart xp) (sel (map fst (Map.elements ms)) i $0) $1 cs;
       lrx ^(cs)
     Rof ^(cs);
     cs <- BUFCACHE.write (LogHeader xp) (header_to_valu (mk_header 0)) cs;
@@ -2439,7 +2439,7 @@ Module LOG.
     OnCrash
       exists mscs, rep xp F (CommittedTxn cur) mscs
     Begin
-      let^ (cs, v) <- BUFCACHE.read_array (LogData xp) i cs;
+      let^ (cs, v) <- BUFCACHE.read_array (LogData xp) i $1 cs;
       lrx ^(cs, log_prefix ++ [(sel desc i $0, v)])
     Rof ^(cs, []);
     rx ^(MapProperties.of_list log, cs).
