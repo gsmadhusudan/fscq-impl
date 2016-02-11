@@ -349,3 +349,14 @@ Ltac solve_hash_list_rep :=
     => eapply hash_list_rep_subset; [ | exact H ];
         try solve_hashmap_subset
   end.
+
+Lemma hash_list_rep_tail : forall l tail h h' hm,
+  hash_list_rep l h hm ->
+  tail <> nil ->
+  hash_list_rep (tail ++ l) h' hm ->
+  h <> h'.
+Proof.
+
+  intuition.
+  rewrite H2 in H.
+  eapply hash_list_injective in H; eauto.

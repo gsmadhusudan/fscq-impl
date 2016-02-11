@@ -346,6 +346,23 @@ Definition hash_to_valu (h: word hashlen) : valu.
   apply r.
 Defined.
 
+Definition valu_to_hash (v: valu) : word hashlen.
+  rewrite <- hashlen_valulen in v.
+  apply (split1 hashlen (valulen-hashlen) v).
+Defined.
+
+Lemma hash2valu2hash: forall h,
+  valu_to_hash (hash_to_valu h) = h.
+Proof.
+  unfold valu_to_hash, hash_to_valu.
+  unfold eq_rec_r, eq_rec.
+  intros.
+  rewrite <- hashlen_valulen.
+  rewrite <- eq_rect_eq_dec; try apply eq_nat_dec.
+  rewrite <- eq_rect_eq_dec; try apply eq_nat_dec.
+  apply split1_combine.
+Qed.
+
 Lemma hash_to_valu_inj : forall a b,
   hash_to_valu a = hash_to_valu b ->
   a = b.

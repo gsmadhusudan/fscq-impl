@@ -700,7 +700,6 @@ Proof.
     simpl; auto.
 Qed.
 
-
 (** * Isolating an array cell *)
 
 Lemma isolate_fwd' : forall V vs i a stride (default : V),
@@ -1888,6 +1887,13 @@ Definition combine_updN : forall A B i a b (va:A) (vb:B),
 Proof.
   induction i; intros; destruct a, b; simpl; auto.
   rewrite IHi; auto.
+Qed.
+
+Lemma combine_upd : forall T U i (a : list T) (b : list U) v1 v2,
+  List.combine (upd a i v1) (upd b i v2) = upd (List.combine a b) i (v1, v2).
+Proof.
+  unfold upd; intros.
+  apply combine_updN.
 Qed.
 
 Lemma selN_combine : forall Ta Tb i a b (a0:Ta) (b0:Tb),
