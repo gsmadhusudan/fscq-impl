@@ -348,4 +348,6 @@ Ltac solve_hash_list_rep :=
       hash_list_rep ?l _ _ ]
     => eapply hash_list_rep_subset; [ | exact H ];
         try solve_hashmap_subset
+  | [ |- hash_list_rep _ _ _ ]
+    => try (repeat eauto; econstructor)
   end.
