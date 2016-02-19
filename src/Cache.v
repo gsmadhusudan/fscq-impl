@@ -98,20 +98,20 @@ Module BUFCACHE.
   Definition init T (cachesize : nat) (rx : cachestate -> prog T) : prog T :=
     rx (Build_cachestate (Map.empty valu) 0 cachesize eviction_init).
 
-  Definition read_array T a i stride cs rx : prog T :=
-    r <- read (a ^+ i ^* stride) cs;
+  Definition read_array T a i cs rx : prog T :=
+    r <- read (a ^+ i ^* $1) cs;
     rx r.
 
-  Definition write_array T a i stride v cs rx : prog T :=
-    cs <- write (a ^+ i ^* stride) v cs;
+  Definition write_array T a i v cs rx : prog T :=
+    cs <- write (a ^+ i ^* $1) v cs;
     rx cs.
 
-  Definition sync_array T a i stride cs rx : prog T :=
-    cs <- sync (a ^+ i ^* stride) cs;
+  Definition sync_array T a i cs rx : prog T :=
+    cs <- sync (a ^+ i ^* $1) cs;
     rx cs.
 
-  Definition trim_array T a i stride cs rx : prog T :=
-    cs <- trim (a ^+ i ^* stride) cs;
+  Definition trim_array T a i cs rx : prog T :=
+    cs <- trim (a ^+ i ^* $1) cs;
     rx cs.
 
   Lemma mapsto_add : forall a v v' (m : Map.t valu),
@@ -516,15 +516,15 @@ Module BUFCACHE.
 
   Hint Extern 1 ({{_}} progseq (init_recover _) _) => apply init_recover_ok : prog.
 
-  Theorem read_array_ok : forall a i stride cs,
+  Theorem read_array_ok : forall a i cs,
     {< d F vs,
     PRE
-      rep cs d * [[ (F * array a vs stride)%pred d ]] * [[ #i < length vs ]]
+      rep cs d * [[ (F * array a vs $1)%pred d ]] * [[ #i < length vs ]]
     POST RET:^(cs, v)
       rep cs d * [[ v = fst (sel vs i ($0, nil)) ]]
     CRASH
       exists cs', rep cs' d
-    >} read_array a i stride cs.
+    >} read_array a i cs.
   Proof.
     unfold read_array.
     hoare.
@@ -533,23 +533,23 @@ Module BUFCACHE.
     cancel.
   Qed.
 
-  Hint Extern 1 ({{_}} progseq (read_array _ _ _ _) _) => apply read_array_ok : prog.
+  Hint Extern 1 ({{_}} progseq (read_array _ _ _) _) => apply read_array_ok : prog.
 
   Lemma ptsto_tuple : forall AT VA VB AEQ a v,
     @pimpl AT AEQ (VA * VB) (a |-> v) (a |-> (fst v, snd v)).
   Proof. cancel. Qed.
 
-  Theorem write_array_ok : forall a i stride v cs,
+  Theorem write_array_ok : forall a i v cs,
     {< d F vs,
     PRE
-      rep cs d * [[ (F * array a vs stride)%pred d ]] * [[ #i < length vs ]]
+      rep cs d * [[ (F * array a vs $1)%pred d ]] * [[ #i < length vs ]]
     POST RET:cs
       exists d', rep cs d' *
-      [[ (F * array a (upd_prepend vs i v) stride)%pred d' ]]
+      [[ (F * array a (upd_prepend vs i v) $1)%pred d' ]]
     CRASH
       exists cs', rep cs' d \/
-      exists d', rep cs' d' * [[ (F * array a (upd_prepend vs i v) stride)%pred d' ]]
-    >} write_array a i stride v cs.
+      exists d', rep cs' d' * [[ (F * array a (upd_prepend vs i v) $1)%pred d' ]]
+    >} write_array a i v cs.
   Proof.
     unfold write_array, upd_prepend.
     hoare.
@@ -570,19 +570,19 @@ Module BUFCACHE.
     cancel.
   Qed.
 
-  Hint Extern 1 ({{_}} progseq (write_array _ _ _ _ _) _) => apply write_array_ok : prog.
+  Hint Extern 1 ({{_}} progseq (write_array _ _ _ _) _) => apply write_array_ok : prog.
 
-  Theorem sync_array_ok : forall a i stride cs,
+  Theorem sync_array_ok : forall a i cs,
     {< d F vs,
     PRE
-      rep cs d * [[ (F * array a vs stride)%pred d ]] * [[ #i < length vs ]]
+      rep cs d * [[ (F * array a vs $1)%pred d ]] * [[ #i < length vs ]]
     POST RET:cs
       exists d', rep cs d' *
-      [[ (F * array a (upd_sync vs i ($0, nil)) stride)%pred d' ]]
+      [[ (F * array a (upd_sync vs i ($0, nil)) $1)%pred d' ]]
     CRASH
       exists cs', rep cs' d \/
-      exists d', rep cs' d' * [[ (F * array a (upd_sync vs i ($0, nil)) stride)%pred d' ]]
-    >} sync_array a i stride cs.
+      exists d', rep cs' d' * [[ (F * array a (upd_sync vs i ($0, nil)) $1)%pred d' ]]
+    >} sync_array a i cs.
   Proof.
     unfold sync_array, upd_sync.
     hoare.
@@ -603,19 +603,19 @@ Module BUFCACHE.
     cancel.
   Qed.
 
-  Hint Extern 1 ({{_}} progseq (sync_array _ _ _ _) _) => apply sync_array_ok : prog.
+  Hint Extern 1 ({{_}} progseq (sync_array _ _ _) _) => apply sync_array_ok : prog.
 
-  Theorem trim_array_ok : forall a i stride cs,
+  Theorem trim_array_ok : forall a i cs,
     {< d F vs,
     PRE
-      rep cs d * [[ (F * array a vs stride)%pred d ]] * [[ #i < length vs ]]
+      rep cs d * [[ (F * array a vs $1)%pred d ]] * [[ #i < length vs ]]
     POST RET:cs
       exists d' v', rep cs d' *
-      [[ (F * array a (upd vs i v') stride)%pred d' ]]
+      [[ (F * array a (upd vs i v') $1)%pred d' ]]
     CRASH
       exists cs' d' v', rep cs' d' *
-      [[ (F * array a (upd vs i v') stride)%pred d' ]]
-    >} trim_array a i stride cs.
+      [[ (F * array a (upd vs i v') $1)%pred d' ]]
+    >} trim_array a i cs.
   Proof.
     unfold trim_array, upd_sync.
     hoare.
@@ -635,7 +635,7 @@ Module BUFCACHE.
     exact ($0, nil).
   Qed.
 
-  Hint Extern 1 ({{_}} progseq (trim_array _ _ _ _) _) => apply trim_array_ok : prog.
+  Hint Extern 1 ({{_}} progseq (trim_array _ _ _) _) => apply trim_array_ok : prog.
 
   Lemma crash_xform_rep: forall cs m,
     crash_xform (rep cs m) =p=> exists m' cs', [[ possible_crash m m' ]] * rep cs' m'.
