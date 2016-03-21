@@ -84,12 +84,13 @@ Module INODE.
     IPad ia = rec :-> "pad".
 
 
-  Definition nr_direct := 10.
+  Definition nr_direct := 9.
   Definition wnr_direct := natToWord addrlen nr_direct.
 
   Definition inodetype : Rec.type := Rec.RecF ([
     ("len", Rec.WordF addrlen);     (* number of blocks *)
     ("attr", iattrtype);            (* file attributes *)
+    ("dindptr", Rec.WordF addrlen); (* doubly-indirect block pointer *)
     ("indptr", Rec.WordF addrlen);  (* indirect block pointer *)
     ("blocks", Rec.ArrayF (Rec.WordF addrlen) nr_direct)]).
 
@@ -540,19 +541,25 @@ Module INODE.
     apply direct_blocks_length.
     eapply inode_well_formed; eauto.
   Qed.
-
-  Lemma inode_blocks_length': forall m xp l inum Fm d d0 d1 d2 u,
+(*
+("len", Rec.WordF addrlen);     (* number of blocks *)
+    ("attr", iattrtype);            (* file attributes *)
+    ("dindptr", Rec.WordF addrlen); (* doubly-indirect block pointer *)
+    ("indptr", Rec.WordF addrlen);  (* indirect block pointer *)
+    ("blocks", Rec.ArrayF (Rec.WordF addrlen) nr_direct)]).
+*)
+  Lemma inode_blocks_length': forall m xp l inum Fm len attr dindptr indptr blocks u,
     (Fm * irrep xp l)%pred m ->
     inum < length l ->
-    (d, (d0, (d1, (d2, u)))) = selN l inum irec0 ->
-    length d2 = nr_direct.
+    (len, (attr, (dindptr, (indptr, (blocks, u))))) = selN l inum irec0 ->
+    length blocks = nr_direct.
   Proof.
     intros.
     unfold irrep in H.
     rewrite RecArray.array_item_well_formed' in H.
     destruct_lift H.
     rewrite Forall_forall in *.
-    apply (H4 (d, (d0, (d1, (d2, tt))))).
+    apply (H4 (len, (attr, (dindptr, (indptr, (blocks, tt)))))).
     rewrite H1.
     apply Array.in_selN; intuition.
   Qed.
