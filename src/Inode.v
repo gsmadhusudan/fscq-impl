@@ -283,9 +283,130 @@ Module INODE.
   Hint Extern 1 ({{_}} progseq (indget _ _ _ _) _) => apply indget_ok : prog.
   Hint Extern 1 ({{_}} progseq (indput _ _ _ _ _) _) => apply indput_ok : prog.
 
+  (* on-disk representation of doubly-indirect blocks *)
+
+  Definition dindtype := Rec.WordF addrlen.
+  Definition dindblk := Rec.data dindtype.
+  Definition dind0 := @Rec.of_word dindtype $0.
+
+  Definition nr_ind_in_dindirect := Eval compute in (valulen_real / addrlen).
+  Definition wnr_ind_in_dindirect : addr := natToWord addrlen nr_ind_in_dindirect.
+  Definition dinditemsz := Rec.len dindtype.
+
+  Definition nr_dindirect := nr_indirect * nr_ind_in_dindirect.
+  Definition wnr_dindirect : addr := natToWord addrlen nr_dindirect.
 
 
-  Definition blocks_per_inode := nr_direct + nr_indirect.
+  Theorem wordToNat_wnr_dindirect : # wnr_dindirect = nr_dindirect.
+  Proof.
+    unfold wnr_dindirect.
+    rewrite wordToNat_natToWord_idempotent. reflexivity.
+    unfold nr_dindirect, nr_indirect, nr_ind_in_dindirect.
+    rewrite Nat2N.inj_mul. compute. reflexivity.
+  Qed.
+
+(*
+  Theorem dindsz_ok : valulen * valulen= wordToNat wnr_dindirect * dinditemsz.
+  Proof.
+    unfold nr_ind_in_dindirect, dinditemsz, nr_ind_in_dindirect.
+    rewrite valulen_is; compute; auto.
+  Qed.
+*)
+
+  Theorem dindsz_ok : valulen * valulen = inditemsz * dinditemsz * nr_dindirect.
+  Proof.
+    apply Nat2N.inj. (* do this in N to prevent stack overflows in nat *)
+    rewrite indsz_ok.
+    unfold nr_dindirect.
+    rewrite wordToNat_wnr_indirect.
+    repeat rewrite Nat2N.inj_mul.
+    reflexivity.
+  Qed.
+
+  Definition dindxp bn := RecArray.Build_xparams bn $1.
+
+  Definition dindrep1 (blist : list addr) := length blist = nr_dindirect.
+  Definition dindrep2 bxp bn := BALLOC.valid_block bxp bn.
+  Definition dindrep3 bn blist := RecArray.array_item dindtype wnr_dindirect dindsz_ok (dindxp bn) blist.
+
+  Definition dindrep bxp bn (blist : list addr) :=
+    ([[ dindrep1 blist ]] * [[ dindrep2 bxp bn ]] *
+     dindrep3)%pred.
+
+  Definition dindget T lxp a off mscs rx : prog T :=
+    let^ (mscs, v) <- RecArray.get dindtype wnr_ind_in_dindirect dindsz_ok
+         lxp (dindxp a) off mscs;
+    rx ^(mscs, v).
+
+  Definition dindput T lxp a off v mscs rx : prog T :=
+    mscs <- RecArray.put dindtype wnr_ind_in_dindirect dindsz_ok
+           lxp (dindxp a) off v mscs;
+    rx mscs.
+
+  Theorem dindirect_length : forall Fm bxp bn l m,
+    (Fm * dindrep bxp bn l)%pred m -> length l = nr_ind_in_dindirect.
+  Proof.
+    unfold dindrep; intros.
+    destruct_lift H; auto.
+  Qed.
+
+  Theorem wordToNat_wnr_ind_in_dindirect : # wnr_ind_in_dindirect = nr_ind_in_dindirect.
+  Proof.
+    compute. auto.
+  Qed.
+
+  Opaque wnr_ind_in_dindirect.
+
+  Theorem dindirect_bound : forall Fm bxp bn l m,
+    (Fm * dindrep bxp bn l)%pred m -> length l <= wordToNat wnr_ind_in_dindirect.
+  Proof.
+    rewrite wordToNat_wnr_ind_in_dindirect.
+    intros.
+    erewrite dindirect_length; eauto.
+  Qed.
+
+  Theorem dindget_ok : forall lxp bxp a off mscs,
+    {< F Fm A mbase m blist bn,
+    PRE           LOG.rep lxp F (ActiveTxn mbase m) mscs *
+                  [[ (Fm * dindrep bxp a blist)%pred (list2mem m) ]] *
+                  [[ (A * #off |-> bn)%pred (list2nmem blist) ]]
+    POST RET:^(mscs,r)
+                  LOG.rep lxp F (ActiveTxn mbase m) mscs *
+                  [[ r = bn ]]
+    CRASH         LOG.would_recover_old lxp F mbase
+    >} dindget lxp a off mscs.
+  Proof.
+    unfold dindget, dindrep, dindxp.
+    hoare.
+  Qed.
+
+  Theorem dindput_ok : forall lxp bxp a off bn mscs,
+    {< F Fm A mbase m blist v0,
+    PRE       LOG.rep lxp F (ActiveTxn mbase m) mscs *
+              [[ (Fm * dindrep bxp a blist)%pred (list2mem m) ]] *
+              [[ (A * #off |-> v0)%pred (list2nmem blist) ]]
+    POST RET:mscs
+              exists m' blist', LOG.rep lxp F (ActiveTxn mbase m') mscs *
+              [[ (Fm * dindrep bxp a blist')%pred (list2mem m') ]] *
+              [[ (A * #off |-> bn)%pred (list2nmem blist')]]
+    CRASH     LOG.would_recover_old lxp F mbase
+    >} dindput lxp a off bn mscs.
+  Proof.
+    unfold dindput, dindrep, dindxp.
+    hoare.
+  Qed.
+
+  Hint Extern 1 ({{_}} progseq (dindget _ _ _ _) _) => apply dindget_ok : prog.
+  Hint Extern 1 ({{_}} progseq (dindput _ _ _ _ _) _) => apply dindput_ok : prog.
+
+  Definition blocks_per_inode := nr_direct + nr_indirect + nr_dindirect.
+
+  Fact nr_dindirect_bound : nr_dindirect <= wordToNat wnr_dindirect.
+  Proof.
+    unfold wnr_dindirect. 
+    rewrite wordToNat_natToWord_idempotent. auto.
+    unfold nr_dindirect. rewrite Nat2N.inj_mul. compute; auto.
+  Qed.
 
   Fact nr_indirect_bound : nr_indirect <= wordToNat wnr_indirect.
   Proof.
@@ -298,11 +419,54 @@ Module INODE.
     auto.
   Qed.
 
+  Local Hint Resolve nr_dindirect_bound.
   Local Hint Resolve nr_indirect_bound.
   Local Hint Resolve nr_direct_bound.
   Local Hint Resolve wlt_lt.
   Local Hint Resolve wle_le.
   Hint Rewrite removeN_updN : core.
+
+  Definition dindlist0 := repeat (natToWord dinditemsz 0) nr_ind_in_dindirect.
+
+  Theorem dind_ptsto : forall bxp a vs,
+    dindrep bxp a vs
+    =p=> (a |-> (rep_block dindsz_ok vs))%pred.
+  Proof.
+    unfold dindrep, array_item, array_item_pairs, dindxp.
+    cancel.
+    destruct vs_nested; inversion H0.
+    pose proof (length_nil vs_nested) as Hx.
+    apply Hx in H4. subst. simpl in *.
+    rewrite app_nil_r. cancel.
+  Qed.
+
+  Theorem dind_ptsto_zero : forall a,
+    (a |-> $0)%pred =p=>
+    array_item dindtype wnr_ind_in_dindirect dindsz_ok (dindxp a) dindlist0.
+  Proof.
+    intros.
+    unfold array_item, array_item_pairs, dindxp.
+    norm.
+    instantiate (vs_nested := [ RecArray.block_zero indtype wnr_ind_in_dindirect ]).
+    unfold rep_block, block_zero, wreclen_to_valu; simpl.
+    rewrite Rec.to_of_id.
+    rewrite dindsz_ok; auto.
+
+    unfold block_zero.
+    rewrite wordToNat_wnr_ind_in_dindirect. unfold nr_ind_in_dindirect.
+    rewrite Forall_forall.
+    intuition.
+    simpl in H; intuition; subst; auto.
+    rewrite Forall_forall; auto.
+  Qed.
+
+  Theorem dindlist0_length : length dindlist0 = nr_ind_in_dindirect.
+  Proof.
+    unfold dindlist0; apply repeat_length.
+  Qed.
+
+
+  Local Hint Resolve dindlist0_length.
 
   Definition indlist0 := repeat (natToWord inditemsz 0) nr_indirect.
 
@@ -374,11 +538,17 @@ Module INODE.
     If (wlt_dec off wnr_direct) {
       rx ^(mscs, sel (i :-> "blocks") off $0)
     } else {
-      let^ (mscs, v) <- indget lxp (i :-> "indptr") (off ^- wnr_direct) mscs;
-      rx ^(mscs, v)
+      If (wlt_dec off (wnr_direct ^+ wnr_indirect)) {
+        let^ (mscs, v) <- indget lxp (i :-> "indptr") (off ^- wnr_direct) mscs;
+        rx ^(mscs, v)
+      } else {
+        let^ (mscs, ind) <- dindget lxp (i :-> "dindptr") ((off ^- wnr_direct ^- wnr_indirect) ^/ wnr_indirect) mscs;
+        let^ (mscs, v) <- indget lxp ind ((off ^- wnr_direct ^- wnr_indirect) ^% wnr_indirect) mscs;
+        rx ^(mscs, v)
+      }
     }.
 
-  Definition igrow_alloc T lxp bxp xp (i0 : irec) inum a mscs rx : prog T := Eval compute_rec in
+  Definition igrow_ind_alloc T lxp bxp xp (i0 : irec) inum a mscs rx : prog T := Eval compute_rec in
     let off := i0 :-> "len" in
     let i := i0 :=> "len" := (off ^+ $1) in
     let^ (mscs, bn) <- BALLOC.alloc lxp bxp mscs;
@@ -392,12 +562,80 @@ Module INODE.
         rx ^(mscs, true)
     end.
 
-  Definition igrow_indirect T lxp xp (i0 : irec) inum a mscs rx : prog T := Eval compute_rec in
+  Definition igrow_indirect T lxp bxp xp (i0 : irec) inum a mscs rx : prog T := Eval compute_rec in
+    let off := i0 :-> "len" in
+    let off' := off ^+ $1 in
+    let i := i0 :=> "len" := off' in
+    If (weq off wnr_direct) {
+      let^ (mscs, r) <- igrow_ind_alloc lxp bxp xp i0 inum a mscs;
+      rx ^(mscs, r)
+    } else {
+      mscs <- indput lxp (i :-> "indptr") (off ^- wnr_direct) a mscs;
+      mscs <- irput lxp xp inum i mscs;
+      rx ^(mscs, true)
+    }.
+
+  Definition igrow_dind_alloc_ind T lxp bxp xp (i0 : irec) inum a mscs rx : prog T := Eval compute_rec in
     let off := i0 :-> "len" in
     let i := i0 :=> "len" := (off ^+ $1) in
-    mscs <- indput lxp (i :-> "indptr") (off ^- wnr_direct) a mscs;
-    mscs <- irput lxp xp inum i mscs;
-    rx ^(mscs, true).
+    let^ (mscs, bn) <- BALLOC.alloc lxp bxp mscs;
+    match bn with
+    | None => rx ^(mscs, false)
+    | Some bnum =>
+        mscs <- LOG.write lxp bnum $0 mscs;
+        mscs <- dindput lxp (i0 :-> "dindptr") ((off ^- wnr_direct ^- wnr_indirect) ^/ wnr_indirect) bnum mscs;
+        mscs <- indput lxp bnum ((off ^- wnr_direct ^- wnr_indirect) ^% wnr_indirect) a mscs;
+        mscs <- irput lxp xp inum i mscs;
+        rx ^(mscs, true)
+    end.
+
+  Definition igrow_dind_alloc T lxp bxp xp (i0 : irec) inum a mscs rx : prog T := Eval compute_rec in
+    let off := i0 :-> "len" in
+    let i := i0 :=> "len" := (off ^+ $1) in
+    let^ (mscs, bn0) <- BALLOC.alloc lxp bxp mscs;
+    let^ (mscs, bn1) <- BALLOC.alloc lxp bxp mscs;
+    match (bn0, bn1) with
+    | (None, None) => rx ^(mscs, false)
+    | (None, Some bnum) => 
+        mscs <- BALLOC.free lxp bxp bnum mscs;
+        rx ^(mscs, false)
+    | (Some bnum, None) => 
+        mscs <- BALLOC.free lxp bxp bnum mscs;
+        rx ^(mscs, false)
+    | (Some bnum_dind, Some bnum_ind) =>
+        let i' := (i :=> "dindptr" := bnum_dind) in
+        mscs <- LOG.write lxp bnum_dind $0 mscs;
+        mscs <- LOG.write lxp bnum_ind $0 mscs;
+        mscs <- dindput lxp (i :-> "dindptr") ((off ^- wnr_direct ^- wnr_indirect) ^% wnr_indirect) bnum_ind mscs;
+        mscs <- indput lxp bnum_ind ((off ^- wnr_direct ^- wnr_indirect) ^% wnr_indirect) a mscs;
+        mscs <- irput lxp xp inum i' mscs;
+        rx ^(mscs, true)
+    end.
+
+  Definition igrow_dindirect T lxp bxp xp (i0 : irec) inum a mscs rx : prog T := Eval compute_rec in
+    let off := i0 :-> "len" in
+    let off' := off ^+ $1 in
+    let i := i0 :=> "len" := off' in
+    If (weq off (wnr_direct ^+ wnr_indirect)) {
+      let^ (mscs, r) <- igrow_dind_alloc lxp bxp xp i0 inum a mscs;
+      rx ^(mscs, r)
+    } else {
+      let dind_off := (off ^- wnr_direct ^- wnr_indirect) in
+      If (weq dind_off $0) {
+        let^ (mscs, r) <- igrow_dind_alloc lxp bxp xp i0 inum a mscs;
+        rx ^(mscs, r)
+      } else {
+        If (weq (dind_off ^% wnr_indirect) $0) {
+          let^ (mscs, r) <- igrow_dind_alloc_ind lxp bxp xp i0 inum a mscs;
+          rx ^(mscs, r)
+        } else {
+          let^ (mscs, ind) <- dindget lxp (i :-> "dindptr") (dind_off ^/ wnr_indirect) mscs;
+          mscs <- indput lxp ind (dind_off ^% wnr_indirect) a mscs;
+          mscs <- irput lxp xp inum i mscs;
+          rx ^(mscs, true)
+        }
+      }
+    }.
 
   Definition igrow_direct T lxp xp (i0 : irec) inum a mscs rx : prog T := Eval compute_rec in
     let off := i0 :-> "len" in
@@ -413,12 +651,12 @@ Module INODE.
       let^ (mscs, r) <- igrow_direct lxp xp i0 inum a mscs;
       rx ^(mscs, r)
     } else {
-      If (weq off wnr_direct) {
-        let^ (mscs, r) <- igrow_alloc lxp bxp xp i0 inum a mscs;
-        rx ^(mscs, r)
-      } else {
-        let^ (mscs, r) <- igrow_indirect lxp xp i0 inum a mscs;
-        rx ^(mscs, r)
+        If (wlt_dec off (wnr_indirect ^+ wnr_direct)) {
+          let^ (mscs, r) <- igrow_indirect lxp bxp xp i0 inum a mscs;
+          rx ^(mscs, r)
+        } else {
+          let^ (mscs, r) <- igrow_dindirect lxp bxp xp i0 inum a mscs;
+          rx ^(mscs, r)
       }
     }.
 
@@ -436,7 +674,7 @@ Module INODE.
 
 
   Definition indirect_valid bxp n bn blist :=
-     ([[ n <= nr_direct ]] \/ [[ n > nr_direct ]] * indrep bxp bn blist)%pred.
+     ([[ n <= nr_direct ]] \/ [[ n > nr_direct]] * indrep bxp bn blist)%pred.
 
 
   Lemma indirect_valid_r : forall bxp n bn blist,
