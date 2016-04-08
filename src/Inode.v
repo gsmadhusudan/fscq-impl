@@ -305,33 +305,17 @@ Module INODE.
     rewrite Nat2N.inj_mul. compute. reflexivity.
   Qed.
 
-(*
-  Theorem dindsz_ok : valulen * valulen= wordToNat wnr_dindirect * dinditemsz.
+  Theorem dindsz_ok : valulen= wordToNat wnr_ind_in_dindirect * dinditemsz.
   Proof.
     unfold nr_ind_in_dindirect, dinditemsz, nr_ind_in_dindirect.
     rewrite valulen_is; compute; auto.
   Qed.
-*)
-
-  Theorem dindsz_ok : valulen * valulen = inditemsz * dinditemsz * nr_dindirect.
-  Proof.
-    apply Nat2N.inj. (* do this in N to prevent stack overflows in nat *)
-    rewrite indsz_ok.
-    unfold nr_dindirect.
-    rewrite wordToNat_wnr_indirect.
-    repeat rewrite Nat2N.inj_mul.
-    reflexivity.
-  Qed.
 
   Definition dindxp bn := RecArray.Build_xparams bn $1.
 
-  Definition dindrep1 (blist : list addr) := length blist = nr_dindirect.
-  Definition dindrep2 bxp bn := BALLOC.valid_block bxp bn.
-  Definition dindrep3 bn blist := RecArray.array_item dindtype wnr_dindirect dindsz_ok (dindxp bn) blist.
-
   Definition dindrep bxp bn (blist : list addr) :=
-    ([[ dindrep1 blist ]] * [[ dindrep2 bxp bn ]] *
-     dindrep3)%pred.
+    ([[ length blist = nr_dindirect ]] * [[ BALLOC.valid_block bxp bn ]] *
+     RecArray.array_item dindtype wnr_ind_in_dindirect dindsz_ok (dindxp bn) blist)%pred.
 
   Definition dindget T lxp a off mscs rx : prog T :=
     let^ (mscs, v) <- RecArray.get dindtype wnr_ind_in_dindirect dindsz_ok
@@ -663,13 +647,31 @@ Module INODE.
   Definition ishrink T lxp bxp xp inum mscs rx : prog T := Eval compute_rec in
     let^ (mscs, (i0 : irec)) <- irget lxp xp inum mscs;
     let i := i0 :=> "len" := (i0 :-> "len" ^- $1) in
-    If (weq (i :-> "len") wnr_direct) {
-      mscs <- BALLOC.free lxp bxp (i0 :-> "indptr") mscs;
-      mscs <- irput lxp xp inum i mscs;
-      rx mscs
+    If (wlt_dec (i :-> "len") (wnr_direct ^+ wnr_indirect)) {
+      If (weq (i :-> "len") wnr_direct) {
+        mscs <- BALLOC.free lxp bxp (i0 :-> "indptr") mscs;
+        mscs <- irput lxp xp inum i mscs;
+        rx mscs
+      } else {
+        mscs <- irput lxp xp inum i mscs;
+        rx mscs
+      }
     } else {
-      mscs <- irput lxp xp inum i mscs;
-      rx mscs
+      If (weq ((i :-> "len" ^- wnr_indirect ^- wnr_direct) ^% wnr_indirect) $0) {
+        let^ (mscs, ind) <- dindget lxp (i :-> "dindptr") ((i :-> "len" ^- wnr_indirect ^- wnr_direct) ^/ wnr_indirect) mscs;
+        mscs <- BALLOC.free lxp bxp ind mscs;
+        If (weq (i :-> "len") (wnr_indirect ^+ wnr_direct)) {
+          mscs <- BALLOC.free lxp bxp (i0 :-> "dindptr") mscs;
+          mscs <- irput lxp xp inum i mscs;
+          rx mscs
+        } else {
+          mscs <- irput lxp xp inum i mscs;
+          rx mscs
+        }
+      } else {
+        mscs <- irput lxp xp inum i mscs;
+        rx mscs
+      }
     }.
 
 
