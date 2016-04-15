@@ -237,7 +237,7 @@ Module INODE.
     reflexivity.
   Qed.
 
-  Opaque wnr_indirect.
+
 
   Theorem indirect_bound : forall Fm bxp bn l m,
     (Fm * indrep bxp bn l)%pred m -> length l <= wordToNat wnr_indirect.
@@ -314,7 +314,7 @@ Module INODE.
   Definition dindxp bn := RecArray.Build_xparams bn $1.
 
   Definition dindrep bxp bn (blist : list addr) :=
-    ([[ length blist = nr_dindirect ]] * [[ BALLOC.valid_block bxp bn ]] *
+    ([[ length blist = nr_ind_in_dindirect ]] * [[ BALLOC.valid_block bxp bn ]] *
      RecArray.array_item dindtype wnr_ind_in_dindirect dindsz_ok (dindxp bn) blist)%pred.
 
   Definition dindget T lxp a off mscs rx : prog T :=
@@ -480,7 +480,6 @@ Module INODE.
     rewrite indsz_ok; auto.
 
     unfold block_zero.
-    rewrite wordToNat_wnr_indirect. unfold nr_indirect.
     rewrite Forall_forall.
     intuition.
     simpl in H; intuition; subst; auto.
