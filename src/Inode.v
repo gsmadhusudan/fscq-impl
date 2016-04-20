@@ -307,6 +307,20 @@ Module INODE.
     rewrite Nat2N.inj_mul. compute. reflexivity.
   Qed.
 
+  Theorem nr_in_dindirect_eq_nr_indirect: nr_ind_in_dindirect = nr_indirect.
+  Proof. reflexivity. Qed.
+
+  Theorem wnr_in_dindirect_eq_wnr_indirect : wnr_ind_in_dindirect = wnr_indirect.
+  Proof. reflexivity. Qed.
+
+  Theorem wnr_indirect_sqr_eq_wnr_dindirect : wnr_indirect ^* wnr_indirect = wnr_dindirect.
+  Proof.
+    unfold wnr_dindirect, nr_dindirect, wnr_indirect.
+    rewrite nr_in_dindirect_eq_nr_indirect.
+    rewrite natToWord_mult.
+    reflexivity.
+  Qed.
+
   Theorem dindsz_ok : valulen= wordToNat wnr_ind_in_dindirect * dinditemsz.
   Proof.
     unfold nr_ind_in_dindirect, dinditemsz, nr_ind_in_dindirect.
@@ -342,8 +356,6 @@ Module INODE.
     compute. auto.
   Qed.
 
-  Opaque wnr_ind_in_dindirect.
-
   Theorem dindirect_bound : forall Fm bxp bn l m,
     (Fm * dindrep bxp bn l)%pred m -> length l <= wordToNat wnr_ind_in_dindirect.
   Proof.
@@ -353,10 +365,10 @@ Module INODE.
   Qed.
 
   Theorem dindget_ok : forall lxp bxp a off mscs,
-    {< F Fm A mbase m blist bn,
+    {< F Fm A mbase m indlist bn,
     PRE           LOG.rep lxp F (ActiveTxn mbase m) mscs *
-                  [[ (Fm * dindrep bxp a blist)%pred (list2mem m) ]] *
-                  [[ (A * #off |-> bn)%pred (list2nmem blist) ]]
+                  [[ (Fm * dindrep bxp a indlist)%pred (list2mem m) ]] *
+                  [[ (A * #off |-> bn)%pred (list2nmem indlist) ]]
     POST RET:^(mscs,r)
                   LOG.rep lxp F (ActiveTxn mbase m) mscs *
                   [[ r = bn ]]
@@ -367,15 +379,31 @@ Module INODE.
     hoare.
   Qed.
 
+  Definition dindrep_internal bxp blist indlist :=
+    (exists ind_block, [[ blist = concat ind_block ]] *
+     listmatch (fun indaddr contents => indrep bxp indaddr contents) indlist ind_block)%pred.
+
+  Definition n_dindirect := N.of_nat nr_dindirect.
+
+  Theorem n_dindirect_eqiv_nr_dindirect : nr_dindirect = N.to_nat n_dindirect.
+  Proof.
+    unfold n_dindirect. rewrite Nat2N.id. auto.
+  Qed.
+
+  Theorem n_dindirect_eqiv_nr_dindirect' : n_dindirect = N.of_nat nr_dindirect.
+  Proof.
+    unfold n_dindirect. reflexivity.
+  Qed.
+
   Theorem dindput_ok : forall lxp bxp a off bn mscs,
-    {< F Fm A mbase m blist v0,
+    {< F Fm A mbase m indlist v0,
     PRE       LOG.rep lxp F (ActiveTxn mbase m) mscs *
-              [[ (Fm * dindrep bxp a blist)%pred (list2mem m) ]] *
-              [[ (A * #off |-> v0)%pred (list2nmem blist) ]]
+              [[ (Fm * dindrep bxp a indlist)%pred (list2mem m) ]] *
+              [[ (A * #off |-> v0)%pred (list2nmem indlist) ]]
     POST RET:mscs
-              exists m' blist', LOG.rep lxp F (ActiveTxn mbase m') mscs *
-              [[ (Fm * dindrep bxp a blist')%pred (list2mem m') ]] *
-              [[ (A * #off |-> bn)%pred (list2nmem blist')]]
+              exists m' indlist', LOG.rep lxp F (ActiveTxn mbase m') mscs *
+              [[ (Fm * dindrep bxp a indlist')%pred (list2mem m') ]] *
+              [[ (A * #off |-> bn)%pred (list2nmem indlist')]]
     CRASH     LOG.would_recover_old lxp F mbase
     >} dindput lxp a off bn mscs.
   Proof.
@@ -421,11 +449,14 @@ Module INODE.
   Proof.
     unfold dindrep, array_item, array_item_pairs, dindxp.
     cancel.
-    destruct vs_nested; inversion H0.
+    destruct vs_nested. inversion H0.
+    simpl.
     pose proof (length_nil vs_nested) as Hx.
+    inversion H0.
     apply Hx in H4. subst. simpl in *.
     rewrite app_nil_r. cancel.
   Qed.
+
 
   Theorem dind_ptsto_zero : forall a,
     (a |-> $0)%pred =p=>
@@ -440,7 +471,6 @@ Module INODE.
     rewrite dindsz_ok; auto.
 
     unfold block_zero.
-    rewrite wordToNat_wnr_ind_in_dindirect. unfold nr_ind_in_dindirect.
     rewrite Forall_forall.
     intuition.
     simpl in H; intuition; subst; auto.
@@ -709,11 +739,10 @@ Module INODE.
     omega.
   Qed.
 
-
   Lemma indirect_valid_off_bound : forall F bxp n off bn blist m,
     (F * indirect_valid bxp n bn blist)%pred m
     -> wordToNat off < n
-    -> n <= blocks_per_inode
+    -> n <= nr_direct + nr_indirect
     -> (off >= wnr_direct)%word
     -> wordToNat (off ^- wnr_direct) < length blist.
   Proof.
@@ -724,8 +753,75 @@ Module INODE.
     rewrite wminus_minus; auto.
     apply wle_le in H2.
     replace (wordToNat wnr_direct) with nr_direct in * by auto.
-    unfold blocks_per_inode in H1.
+    apply plus_lt_reg_l with nr_direct.
+    rewrite Nat.add_sub_assoc by assumption.
+    simpl. omega.
+  Qed.
+
+  Definition dindirect_valid bxp n bn blist :=
+     ([[ n <= nr_direct + nr_indirect ]] \/ [[ n > nr_direct + nr_indirect]] * dindrep bxp bn blist)%pred.
+
+  Lemma dindirect_valid_r : forall bxp n bn blist,
+    n > nr_direct + nr_indirect
+    -> dindirect_valid bxp n bn blist <=p=> dindrep bxp bn blist.
+  Proof.
+    intros. unfold dindirect_valid, piff; split; cancel.
     omega.
+  Qed.
+
+  Lemma dindirect_valid_l : forall bxp n bn blist,
+    n <= nr_direct + nr_indirect
+    -> dindirect_valid bxp n bn blist <=p=> emp.
+  Proof.
+    intros. unfold dindirect_valid, piff; split; cancel.
+    omega.
+  Qed.
+
+  Lemma dindirect_valid_r_off : forall bxp n off bn blist,
+    wordToNat off < n
+    -> (off >= wnr_direct ^+ wnr_indirect)%word
+    -> dindirect_valid bxp n bn blist <=p=> dindrep bxp bn blist.
+  Proof.
+    auto; intros.
+    apply dindirect_valid_r.
+    apply wle_le in H0.
+    replace (wordToNat (wnr_direct ^+ wnr_indirect)) with (nr_direct + nr_indirect) in * by auto.
+    omega.
+  Qed.
+
+  Definition dindirect_internal_valid bxp n blist indlist:=
+     ([[ n <= nr_direct + nr_indirect ]] \/ [[ n > nr_direct + nr_indirect]] * dindrep_internal bxp blist indlist)%pred.
+
+  Lemma dindirect_internal_valid_r : forall bxp n blist indlist,
+    n > nr_direct + nr_indirect
+    -> dindirect_internal_valid bxp n blist indlist <=p=> dindrep_internal bxp blist indlist.
+  Proof.
+    intros. unfold dindirect_internal_valid, piff; split; cancel.
+    omega.
+  Qed.
+
+  Lemma dindirect_internal_valid_l : forall bxp n blist indlist,
+    n <= nr_direct + nr_indirect
+    -> dindirect_internal_valid bxp n blist indlist <=p=> emp.
+  Proof.
+    intros. unfold dindirect_internal_valid, piff; split; cancel.
+    omega.
+  Qed.
+
+  Lemma dindirect_internal_valid_r_off : forall bxp n off blist indlist,
+    wordToNat off < n
+    -> (off >= wnr_direct ^+ wnr_indirect)%word
+    -> dindirect_internal_valid bxp n blist indlist <=p=> dindrep_internal bxp blist indlist.
+  Proof.
+    auto; intros.
+    apply dindirect_internal_valid_r.
+    apply wle_le in H0.
+    replace (wordToNat (wnr_direct ^+ wnr_indirect)) with (nr_direct + nr_indirect) in * by auto.
+    omega.
+  Qed.
+
+  Lemma wnr_direct_plus_indirect_ok : # (wnr_direct ^+ wnr_indirect) = nr_direct + nr_indirect.
+    reflexivity.
   Qed.
 
   (** The inode `ino` is equivalent to the on-disk record `rec` *)
@@ -733,8 +829,10 @@ Module INODE.
     [[ length (IBlocks ino) = wordToNat (rec :-> "len") ]] *
     [[ length (IBlocks ino) <= blocks_per_inode ]] *
     [[ iattr_match (IAttr ino) (rec :-> "attr") ]] *
-    exists blist, indirect_valid bxp (length (IBlocks ino)) (rec :-> "indptr") blist *
-    [[ IBlocks ino = firstn (length (IBlocks ino)) ((rec :-> "blocks") ++ blist) ]]
+    exists indlist, indirect_valid bxp (length (IBlocks ino)) (rec :-> "indptr") indlist *
+    exists dind_indlist, dindirect_valid bxp (length (IBlocks ino)) (rec :-> "dindptr") dind_indlist *
+    exists dindlist, dindirect_internal_valid bxp (length (IBlocks ino)) dindlist dind_indlist *
+    [[ IBlocks ino = firstn (length (IBlocks ino)) ((rec :-> "blocks") ++ indlist ++ dindlist) ]]
     )%pred.
 
   (** the list `ilist` of inodes is valid *)
@@ -785,13 +883,7 @@ Module INODE.
     apply direct_blocks_length.
     eapply inode_well_formed; eauto.
   Qed.
-(*
-("len", Rec.WordF addrlen);     (* number of blocks *)
-    ("attr", iattrtype);            (* file attributes *)
-    ("dindptr", Rec.WordF addrlen); (* doubly-indirect block pointer *)
-    ("indptr", Rec.WordF addrlen);  (* indirect block pointer *)
-    ("blocks", Rec.ArrayF (Rec.WordF addrlen) nr_direct)]).
-*)
+
   Lemma inode_blocks_length': forall m xp l inum Fm len attr dindptr indptr blocks u,
     (Fm * irrep xp l)%pred m ->
     inum < length l ->
@@ -827,18 +919,24 @@ Module INODE.
     -> inode_match bxp ino rec <=p=> inode_match_direct ino rec.
   Proof.
     unfold piff, inode_match, inode_match_direct; split; intros.
+    apply wle_le in H.
+    cancel.
+    rewrite indirect_valid_l; try (rewrite H2; unfold nr_direct in *; simpl; omega).
+    rewrite dindirect_valid_l; try (rewrite H2; unfold nr_direct in *; simpl; omega).
 
-    cancel. 
-    rewrite indirect_valid_l; auto.
-    eapply wle_eq_le; eauto; simpl; auto.
-    eapply wle_eq_le; eauto; simpl; auto.
-    erewrite <- firstn_app_l; eauto.
-    rewrite direct_blocks_length; auto.
-    eapply wle_eq_le; eauto; simpl; auto.
+    rewrite dindirect_internal_valid_l; try (rewrite H2; unfold nr_direct in *; simpl; omega).
+    cancel.
+    unfold nr_direct; omega.
+    rewrite firstn_app_l in H8. assumption.
+
+    rewrite direct_blocks_length by auto. unfold nr_direct; omega.
 
     cancel.
-    instantiate (blist := nil).
-    rewrite indirect_valid_l; auto.
+    instantiate (indlist := nil). instantiate (dindlist := nil). instantiate (dind_indlist := nil).
+    rewrite indirect_valid_l; auto; try omega.
+    rewrite dindirect_valid_l by omega.
+    rewrite dindirect_internal_valid_l by omega.
+    cancel.
     unfold blocks_per_inode; omega.
     rewrite app_nil_r; auto.
   Qed.
@@ -914,20 +1012,29 @@ Module INODE.
     erewrite listmatch_length_r; eauto; omega.
   Qed.
 
+    Lemma wordToNat_natToWord_blocks_per_inode : wordToNat (natToWord addrlen blocks_per_inode) = blocks_per_inode.
+    Proof.
+      apply wordToNat_natToWord_idempotent.
+      unfold blocks_per_inode, nr_dindirect.
+      repeat rewrite Nat2N.inj_add.
+      rewrite Nat2N.inj_mul.
+      compute. auto.
+    Qed.
+
   Lemma blocks_bound: forall Fm bxp xp l m i,
     (Fm * rep bxp xp l)%pred m
     -> length (IBlocks (sel l i inode0)) <= wordToNat (natToWord addrlen blocks_per_inode).
   Proof.
     unfold rep, sel; intros.
-    destruct_lift H.
+    destruct_lift' H.
+    rewrite wordToNat_natToWord_blocks_per_inode in *.
     destruct (lt_dec (wordToNat i) (length l)).
-    extract_listmatch_at i; unfold nr_direct in *.
-    autorewrite with defaults. 
-    unfold blocks_per_inode, nr_indirect in H8; simpl in H8; auto.
+    extract_listmatch_at i; unfold nr_direct in *. assumption.
+    apply not_lt in n.
+    destruct_lift H.
     rewrite selN_oob by omega.
     simpl; omega.
   Qed.
-
 
   Ltac inode_bounds' := match goal with
     | [ H : context [ (irrep _ ?l) ] |- length ?l <= _ ] =>
@@ -1074,6 +1181,9 @@ Module INODE.
     eapply listmatch_updN_selN; autorewrite with defaults; inode_bounds.
     unfold inode_match; rec_simpl.
     cancel.
+    instantiate (dindlist1:=dindlist). instantiate (indlist1:=indlist). instantiate (dind_indlist0:=dind_indlist).
+    cancel.
+    assumption.
   Qed.
 
 
