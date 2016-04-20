@@ -60,6 +60,7 @@ Section LISTPRED.
   Variable V : Type.
   Variable prd : T -> @pred AT AEQ V.
 
+  (** `prd` holds for all elements of `ts` *)
   Fixpoint listpred (ts : list T) :=
     match ts with
     | nil => emp
@@ -282,6 +283,7 @@ Section LISTMATCH.
 
   Definition pprd := prod_curry prd.
 
+  (** lists `a` and `b` are identical under the transformation `prd` *)
   Definition listmatch (a : list A) (b : list B) :=
     ([[ length a = length b ]] *
      listpred pprd (List.combine a b))%pred.

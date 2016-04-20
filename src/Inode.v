@@ -108,6 +108,7 @@ Module INODE.
   Definition xp_to_raxp xp :=
     RecArray.Build_xparams (IXStart xp) (IXLen xp).
 
+  (** `ilist` is a list of inodes *)
   Definition irrep xp (ilist : list irec) :=
     ([[ length ilist = wordToNat (IXLen xp ^* items_per_valu) ]] *
      RecArray.array_item inodetype items_per_valu itemsz_ok (xp_to_raxp xp) ilist
@@ -204,6 +205,7 @@ Module INODE.
 
   Definition indxp bn := RecArray.Build_xparams bn $1.
 
+  (** The block at `bn` is an indirect block that contains the list `blist` of addresses (each of a data block) *)
   Definition indrep bxp bn (blist : list addr) :=
     ([[ length blist = nr_indirect ]] * [[ BALLOC.valid_block bxp bn ]] *
      RecArray.array_item indtype wnr_indirect indsz_ok (indxp bn) blist)%pred.
@@ -313,6 +315,7 @@ Module INODE.
 
   Definition dindxp bn := RecArray.Build_xparams bn $1.
 
+  (** The block at `bn` is a doubly indirect block that contains a list of addresses of indirect blocks *)
   Definition dindrep bxp bn (blist : list addr) :=
     ([[ length blist = nr_ind_in_dindirect ]] * [[ BALLOC.valid_block bxp bn ]] *
      RecArray.array_item dindtype wnr_ind_in_dindirect dindsz_ok (dindxp bn) blist)%pred.
@@ -725,7 +728,8 @@ Module INODE.
     omega.
   Qed.
 
-  Definition inode_match bxp ino (rec : irec) : @pred addr (@weq addrlen) valu := (
+  (** The inode `ino` is equivalent to the on-disk record `rec` *)
+  Definition inode_match bxp (ino : inode) (rec : irec) : @pred addr (@weq addrlen) valu := (
     [[ length (IBlocks ino) = wordToNat (rec :-> "len") ]] *
     [[ length (IBlocks ino) <= blocks_per_inode ]] *
     [[ iattr_match (IAttr ino) (rec :-> "attr") ]] *
@@ -733,6 +737,7 @@ Module INODE.
     [[ IBlocks ino = firstn (length (IBlocks ino)) ((rec :-> "blocks") ++ blist) ]]
     )%pred.
 
+  (** the list `ilist` of inodes is valid *)
   Definition rep bxp xp (ilist : list inode) := (
      exists reclist, irrep xp reclist *
      listmatch (inode_match bxp) ilist reclist)%pred.

@@ -158,14 +158,17 @@ Section RECARRAY.
     rewrite wreclen_valu_id; auto.
   Qed.
 
+  (** `vs` is the list of blocks pointed to by the sequence starting at (RAStart xp) with length (RALen xp) *)
   Definition array_item_pairs (xp : xparams) (vs : list block) : pred :=
     ([[ length vs = wordToNat (RALen xp) ]] *
      [[ Forall Rec.well_formed vs ]] *
      array (RAStart xp) (map rep_block vs) $1)%pred.
 
+  (** `vs` is the list of items pointed to by the sequence starting at (RAStart xp) with length (RALen xp) *)
   Definition array_item (xp : xparams) (vs : list item) :=
     (exists vs_nested, array_item_pairs xp vs_nested *
      [[ vs = concat vs_nested ]])%pred.
+
 
   Theorem array_item_well_formed :
     forall xp vs m, array_item xp vs m -> Forall Rec.well_formed vs.

@@ -9,12 +9,14 @@ Set Implicit Arguments.
 
 (** * A generic array predicate: a sequence of consecutive points-to facts *)
 
+(** the elements of list `vs` are pointed to by `a`, `a+stride`, etc. *)
 Fixpoint array {V : Type} (a : addr) (vs : list V) (stride : addr) : @pred _ (@weq addrlen) _ :=
   match vs with
     | nil => emp
     | v :: vs' => a |-> v * array (a ^+ stride) vs' stride
   end%pred.
 
+(** the elements of list `vs` are pointed to by `a`, `a+1`, etc. *)
 Fixpoint arrayN {V : Type} (a : nat) (vs : list V) : @pred _ eq_nat_dec _ :=
   match vs with
     | nil => emp
@@ -23,6 +25,7 @@ Fixpoint arrayN {V : Type} (a : nat) (vs : list V) : @pred _ eq_nat_dec _ :=
 
 (** * Reading and writing from arrays *)
 
+(** Get the `n`th element from vs *)
 Fixpoint selN (V : Type) (vs : list V) (n : nat) (default : V) : V :=
   match vs with
     | nil => default
