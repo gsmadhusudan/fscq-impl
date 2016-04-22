@@ -347,27 +347,32 @@ Print Forall.
 Print In.
 
 Print seq.
-  Definition dindrep_big bxp bn indlist (blist : list addr) :=
-    (exists indblocks, dindrep bxp bn indlist
+  Definition dindrep_big bxp bn indlist indblocks (blist : list addr) :=
+    (dindrep bxp bn indlist
       * listmatch (indrep bxp) indlist indblocks
       * [[ length blist = nr_dindirect ]]
       * [[ blist = concat indblocks ]]
       )%pred.
 
+
   Definition sublist (A:Type) (n m:nat) (l:list A) :=
     skipn n (firstn m l).
 
-  Theorem dindrep_big_seq : forall A B bxp bn indlist blist off v v2 m,
-    (dindrep_big bxp bn indlist blist * [[ off < nr_dindirect ]]
-      * exists indblks, indrep bxp v2 indblks
-      * [[(A * (off mod nr_ind_in_dindirect) |-> v)%pred (list2nmem indblks) ]]
-      * [[(B * (off / nr_ind_in_dindirect) |-> v2)%pred (list2nmem indlist) ]])%pred m ->
-      selN blist off $0 = v.
+  Opaque nr_ind_in_dindirect.
+
+  Theorem dindrep_big_seq : forall A B bxp bn indlist indblocks blist off v v2 m,
+    (dindrep_big bxp bn indlist indblocks blist * [[ off < nr_dindirect ]]
+      * [[(A * (off / nr_ind_in_dindirect) |-> v2)%pred (list2nmem indblocks) ]]
+      * [[ (B * (off mod nr_ind_in_dindirect) |-> v)%pred (list2nmem v2) ]])%pred m ->
+    selN blist off $0 = v.
   Proof.
-    unfold dindrep_big, indrep.
-    intros. destruct_lift H.
-    unfold dindrep, listmatch in H.
+    unfold dindrep_big, dindrep, indrep; intros.
     destruct_lift H.
+    subst.
+    eapply list2nmem_sel in H2.
+    eapply list2nmem_sel in H0.
+    rewrite H2.
+    rewrite H0.
     admit.
   Admitted.
 
