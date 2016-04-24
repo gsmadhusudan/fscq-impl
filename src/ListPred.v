@@ -414,7 +414,56 @@ Section LISTMATCH.
     cancel; auto.
   Qed.
 
+  Theorem listmatch_lift_l : forall l1 l2 F G P m,
+    (forall x y, prd x y <=p=> ([[(P x)]] * F x y)%pred) ->
+    (G * listmatch l1 l2)%pred m -> Forall P l1.
+  Proof.
+    unfold listmatch.
+    intros.
+    generalize dependent G. generalize dependent l2.
+    induction l1; auto.
+    intros.
+    destruct l2; simpl in *.
+    destruct_lift H0. inversion H2.
+    rewrite H in H0. destruct_lift H0.
+    inversion H2.
+    apply Forall_cons; auto.
+    eapply IHl1.
+    apply sep_star_comm; apply sep_star_assoc; apply sep_star_comm; apply sep_star_and2lift.
+    split.
+    apply sep_star_comm. apply H0.
+    apply H3.
+  Qed.
+
 End LISTMATCH.
+
+  Theorem listmatch_flip : forall A B AT AEQ V (p : A -> B -> pred) (l1 : list A) (l2 : list B),
+    @listmatch A B AT AEQ V p l1 l2 =p=> listmatch (fun b a => p a b) l2 l1.
+  Proof.
+    intros.
+    unfold listmatch.
+    cancel.
+    generalize dependent l2.
+    induction l1. destruct l2; auto.
+    destruct l2. simpl. cancel.
+    simpl. cancel. apply IHl1.
+    intuition.
+  Qed.
+
+  Theorem listmatch_lift_r : forall A B AT AEQ V (p : A -> B -> pred) (l1 : list A) (l2 : list B) F G P m,
+    (forall x y, p x y <=p=> ([[(P y)]] * F x y)%pred) ->
+    (G * @listmatch A B AT AEQ V p l1 l2)%pred m -> Forall P l2.
+  Proof.
+    intros.
+    rewrite listmatch_flip in H0.
+    eapply listmatch_lift_l in H0.
+    intros.
+    apply H0.
+    intros.
+    apply H.
+  Qed.
+
+
 
 Hint Resolve listmatch_length_r.
 Hint Resolve listmatch_length_l.

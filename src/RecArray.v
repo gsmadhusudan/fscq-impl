@@ -46,6 +46,19 @@ Section RECARRAY.
     rewrite Nat.mul_comm. rewrite Nat.add_comm. rewrite <- Nat.div_mod; auto.
   Qed.
 
+  Theorem selN_selN_homogenous : forall T (l : list (list T)) k off d2, homogenous l k ->
+    off < k * length l ->
+    selN (selN l (off / k) nil) (Nat.modulo off k) d2 = selN (concat l) off d2.
+  Proof.
+    unfold homogenous. intros.
+    assert (k > 0) by (destruct (Nat.eq_dec k 0); intuition; subst; intuition).
+    rewrite nested_selN_concat with (m:=k); auto.
+    rewrite concat_eq_fold_right_app.
+    f_equal.
+    symmetry; rewrite mult_comm; rewrite plus_comm; apply Nat.div_mod. intuition; subst; intuition.
+    apply Nat.mod_upper_bound; intuition.
+  Qed.
+
   Theorem selN_list_eq' : forall A len (vs vs' : list A) default,
     length vs = len
     -> length vs' = len

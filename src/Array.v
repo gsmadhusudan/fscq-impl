@@ -1576,6 +1576,13 @@ Proof.
   rewrite skipn_skipn; auto.
 Qed.
 
+Lemma concat_eq_fold_right_app : forall T (l : list (list T)), concat l = fold_right (app (A:=T)) nil l.
+Proof.
+  induction l; auto.
+Qed.
+
+Definition homogenous {T} (l : list (list T)) k := Forall (fun sub => length sub = k) l.
+
 (* several facts about concat on lists of equally-sized
    (homogeneous) lists *)
 Lemma concat_hom_length : forall A (lists: list (list A)) k,
