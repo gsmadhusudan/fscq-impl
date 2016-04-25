@@ -396,6 +396,16 @@ Section LISTMATCH.
     cancel; rewrite sep_star_comm; auto.
   Qed.
 
+  Theorem listmatch_swap : forall a b i av bv ad bd,
+    i < length a -> i < length b ->
+    listmatch a b * (prd av bv) =p=> listmatch (updN a i av) (updN b i bv) * prd (selN a i ad) (selN b i bd).
+  Proof.
+    intros.
+    rewrite listmatch_updN_removeN by auto.
+    cancel.
+    rewrite listmatch_extract with (ad := ad) (bd := bd) (i := i) by auto.
+    cancel.
+  Qed.
 
   Theorem listmatch_app_r: forall F a b av bv,
     length a = length b ->
