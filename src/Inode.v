@@ -602,9 +602,9 @@ Opaque nr_ind_in_dindirect.
   Qed.
 
   Theorem dindget_ok : forall lxp bxp a off mscs,
-    {< F Fm A mbase m indlist bn,
+    {< F Fm A mbase m indlist indblocks blist bn,
     PRE           LOG.rep lxp F (ActiveTxn mbase m) mscs *
-                  [[ (Fm * dindrep bxp a indlist)%pred (list2mem m) ]] *
+                  [[ (Fm * dindrep_big bxp a indlist indblocks blist)%pred (list2mem m) ]] *
                   [[ (A * #off |-> bn)%pred (list2nmem indlist) ]]
     POST RET:^(mscs,r)
                   LOG.rep lxp F (ActiveTxn mbase m) mscs *
@@ -612,46 +612,77 @@ Opaque nr_ind_in_dindirect.
     CRASH         LOG.would_recover_old lxp F mbase
     >} dindget lxp a off mscs.
   Proof.
-    unfold dindget, dindrep, dindxp.
+    unfold dindget.
     hoare.
+    unfold dindrep_big, dindrep. cancel.
+    rewrite wmult_unit.
+    unfold dindrep_big, dindrep in H.
+    destruct_lift H.
+    apply list2nmem_inbound in H4.
+    unfold indrep in H.
+    apply lt_wlt.
+    rewrite wordToNat_wnr_ind_in_dindirect. omega.
   Qed.
-(*
-  Theorem dindget_ok' : forall lxp bxp a off mscs,
-    {< F Fm A B C mbase m indlist blist indaddr indblks v,
-    PRE          LOG.rep lxp F (ActiveTxn mbase m) mscs *
-                  [[ (Fm * dindrep bxp a indlist)%pred (list2mem m) ]] *
-                  [[ (A * #(off ^/ wnr_ind_in_dindirect) |-> indaddr )%pred (list2nmem indlist) ]] *
-                  [[ (Fm * indrep bxp a indblks)%pred (list2mem m) ]] *
-                  [[ (B * #(off ^% wnr_ind_in_dindirect) |-> v )%pred (list2nmem indblks) ]] *
-                  [[ (C * #(off) |-> v)%pred (list2nmem blist) ]]
-    POST RET:^(mscs,r)
-                  LOG.rep lxp F (ActiveTxn mbase m) mscs *
-                  [[ (A * #(off ^/ wnr_ind_in_dindirect) |-> indaddr )%pred (list2nmem indlist) ]] *
-                  [[ (Fm * indrep bxp a indblks)%pred (list2mem m) ]] *
-                  [[ (B * #(off ^% wnr_ind_in_dindirect) |-> v )%pred (list2nmem indblks) ]] *
-                  [[ (C * #(off) |-> v)%pred (list2nmem blist) ]] *
-                  [[ r = indaddr ]]
-    CRASH         LOG.would_recover_old lxp F mbase
-    >} dindget lxp a off mscs.
-  Proof.
-    unfold dindget, dindrep, dindxp.
-    hoare.
-  Qed.
-*)
+
   Theorem dindput_ok : forall lxp bxp a off bn mscs,
-    {< F Fm A mbase m indlist v0,
+    {< F Fm A mbase m indlist indblocks blist indblk_in v0,
     PRE       LOG.rep lxp F (ActiveTxn mbase m) mscs *
-              [[ (Fm * dindrep bxp a indlist)%pred (list2mem m) ]] *
+              [[ (Fm * dindrep_big bxp a indlist indblocks blist * indrep bxp bn indblk_in)%pred (list2mem m) ]] *
               [[ (A * #off |-> v0)%pred (list2nmem indlist) ]]
     POST RET:mscs
-              exists m' indlist', LOG.rep lxp F (ActiveTxn mbase m') mscs *
-              [[ (Fm * dindrep bxp a indlist')%pred (list2mem m') ]] *
+              exists m' indlist' indblocks' blist' indblk_out, LOG.rep lxp F (ActiveTxn mbase m') mscs *
+              [[ (Fm * dindrep_big bxp a indlist' indblocks' blist' * indrep bxp v0 indblk_out)%pred (list2mem m') ]] *
               [[ (A * #off |-> bn)%pred (list2nmem indlist')]]
     CRASH     LOG.would_recover_old lxp F mbase
     >} dindput lxp a off bn mscs.
   Proof.
-    unfold dindput, dindrep, dindxp.
+    unfold dindput.
     hoare.
+    instantiate (ilist := indlist).
+    unfold dindrep_big, dindrep, dindxp.
+    Focus 3.
+    unfold dindrep_big, dindrep, dindxp, upd.
+    rewrite length_updN.
+    instantiate (indblk_out := (selN indblocks # (off) nil)).
+    instantiate (indblocks' := (updN indblocks #(off) indblk_in)).
+    instantiate (blist' := concat (updN indblocks # (off) indblk_in)).
+    cancel.
+    unfold dindrep_big, dindrep in H; destruct_lift H; assumption.
+    unfold dindrep_big, dindrep in H; destruct_lift H; assumption.
+    unfold dindrep_big, dindrep, listmatch in H; destruct_lift H.
+    assert ((Fm * listmatch (indrep bxp) (updN indlist # (off) bn) (updN indblocks # (off) indblk_in) *
+      indrep bxp v9 (selN indblocks # (off) nil) *
+      array_item dindtype wnr_ind_in_dindirect dindsz_ok (dindxp a) (updN indlist # off bn))
+      =p=> (Fm * indrep bxp v9 (selN indblocks # (off) nil) *
+      array_item dindtype wnr_ind_in_dindirect dindsz_ok (dindxp a) (updN indlist # off bn) *
+      listmatch (indrep bxp) (updN indlist # (off) bn) (updN indblocks # (off) indblk_in))) by cancel.
+    apply H3 in H7.
+    eapply listmatch_lift_r in H7.
+    apply concat_hom_length in H7.
+    rewrite H7.
+    rewrite length_updN.
+    rewrite <- H6.
+    rewrite H0.
+    unfold nr_dindirect.
+    rewrite mult_comm. reflexivity.
+    intros. unfold indrep.
+    instantiate (1 := fun x y => (lift_empty (BALLOC.valid_block bxp x) * array_item indtype wnr_indirect indsz_ok (indxp x) y)%pred).
+    unfold piff; split; cancel.
+    cancel.
+    rewrite sep_star_comm.
+    eapply list2nmem_sel in H4 as H5.
+    rewrite H5.
+    apply list2nmem_inbound in H4.
+    apply listmatch_swap; auto.
+    unfold dindrep_big, listmatch in H. destruct_lift H. omega.
+    rewrite wmult_unit.
+    apply lt_wlt. rewrite wordToNat_wnr_ind_in_dindirect.
+    unfold dindrep_big, dindrep, listmatch in H.
+    apply list2nmem_inbound in H4.
+    destruct_lift H.
+    omega.
+    Grab Existential Variables.
+    auto.
   Qed.
 
   Hint Extern 1 ({{_}} progseq (dindget _ _ _ _) _) => apply dindget_ok : prog.
