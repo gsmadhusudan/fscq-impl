@@ -1197,12 +1197,90 @@ Opaque wnr_indirect.
     eapply listmatch_updN_selN; autorewrite with defaults; inode_bounds.
     unfold inode_match; rec_simpl.
     cancel.
-    instantiate (dindlist1:=dindlist). instantiate (indlist1:=indlist). instantiate (dind_indlist0:=dind_indlist).
+    instantiate (dindlist1:=dindlist). instantiate (indlist'0:=indlist'). instantiate (indblocks0 := indblocks).
     cancel.
     assumption.
   Qed.
 
+Fact nr_indirect_lt_nr_dindirect : nr_indirect < nr_dindirect.
+Proof.
+  rewrite <- Nat2N.id with (nr_dindirect).
+  rewrite <- Nat2N.id with (nr_indirect).
+  apply Nomega.Nlt_out. unfold nr_dindirect. rewrite nr_in_dindirect_eq_nr_indirect.
+  rewrite Nat2N.inj_mul. compute. auto.
+Qed.
 
+Fact nr_dindirect_eq : nr_dindirect = nr_indirect * nr_ind_in_dindirect.
+Proof. auto. Qed.
+
+Opaque nr_dindirect.
+  Fact sub_gt_0_lt_sum : forall a b c, a >= b -> a - b < c <-> a < b + c.
+  Proof. split; omega. Qed.
+
+  Fact sub_gt_0_ge_sum : forall a b c, a >= b -> a - b >= c <-> a >= b + c.
+  Proof. split; omega. Qed.
+
+  Fact wminus_wminus_div_lt : forall off ilist inum def,
+    wordToNat off < length (IBlocks (sel ilist inum def)) ->
+    length (IBlocks (sel ilist inum def)) <= blocks_per_inode ->
+    (wnr_direct ^+ wnr_indirect <= off)%word ->
+    (off ^- wnr_direct ^- wnr_indirect ^/ wnr_indirect < wnr_indirect)%word.
+  Proof.
+    intros.
+    apply not_wlt_ge in H1; apply wle_le in H1; simpl in *.
+    replace #(wnr_direct ^+ wnr_indirect) with (nr_direct + nr_indirect) in * by auto.
+    apply wdiv_lt_upper_bound.
+    rewrite wnr_indirect_eq; apply neq0_wneq0. simpl; intuition.
+    replace (wnr_indirect ^* wnr_indirect) with (wnr_dindirect) in * by auto.
+    apply lt_wlt.
+    rewrite wordToNat_wnr_dindirect.
+    repeat rewrite wminus_minus; simpl in *.
+    rewrite wordToNat_wnr_indirect.
+    apply sub_gt_0_lt_sum.
+    apply sub_gt_0_ge_sum; simpl in *; omega.
+    apply sub_gt_0_lt_sum. simpl in *; omega.
+    unfold blocks_per_inode in *. unfold nr_direct in *.
+    rewrite plus_assoc. omega. apply le_wle. simpl in *. omega.
+    apply le_wle.
+    rewrite wordToNat_wnr_indirect.
+    rewrite wminus_minus. simpl wordToNat.
+    apply Nat.le_le_add_le with (nr_direct) (nr_direct); unfold nr_direct; auto.
+    rewrite Nat.sub_add; omega.
+    apply le_wle. simpl; omega.
+  Qed.
+
+
+  Fact wnr_direct_plus_wnr_indirect_eq : # (wnr_direct ^+ wnr_indirect) = nr_direct + nr_indirect.
+  Proof. unfold wnr_direct. rewrite wnr_indirect_eq. compute. auto. Qed.
+  
+  Fact wordToNat_wdivmod : forall (a b : addr), #(b) <> 0 -> # (a ^% b) + # (a ^/ b) * # (b) = # (a).
+  Proof. intros.
+    unfold wmod, wdiv, wordBin.
+    rewrite wordToNat_div; auto.
+    rewrite N2Nat_word, Ninj_mod.
+    repeat rewrite wordToN_nat.
+    repeat rewrite Nat2N.id.
+    symmetry.
+    rewrite plus_comm, mult_comm.
+    apply Nat.div_mod; auto.
+    rewrite wordToN_nat, Nat2N.id; auto.
+    repeat rewrite wordToN_nat.
+    eapply N.lt_trans. apply N.mod_lt. intuition.
+    apply H. apply Nat2N.inj. assumption.
+    Search Npow2. Search goodSize.
+    apply Nomega.Nlt_in.
+    rewrite Nat2N.id, Npow2_nat.
+    apply wordToNat_good.
+  Qed.
+
+  Fact listmatch_indrep_length : forall F l indblks bxp m,
+    (F * listmatch (indrep bxp) l indblks)%pred m -> Forall (fun blist => length blist = nr_indirect) indblks.
+  Proof.
+    intros. eapply listmatch_lift_r in H. apply H.
+    instantiate (1 := fun x y => (lift_empty (BALLOC.valid_block bxp x) * array_item indtype wnr_indirect indsz_ok (indxp x) y)%pred).
+    intros; unfold piff, indrep; split; cancel.
+  Qed.
+  
   Theorem iget_ok : forall lxp bxp xp inum off mscs,
     {< F Fm A B mbase m ilist ino a,
     PRE            LOG.rep lxp F (ActiveTxn mbase m) mscs *
@@ -1215,14 +1293,8 @@ Opaque wnr_indirect.
     >} iget lxp xp inum off mscs.
   Proof.
     unfold iget, rep.
-    hoare.
-    admit.
-    
-    Search listmatch.
-
-
-
     step.
+    unfold inode_match in H3.
     list2nmem_ptsto_cancel; inode_bounds.
 
     step.
@@ -1231,7 +1303,7 @@ Opaque wnr_indirect.
     (* from direct blocks *)
     repeat rewrite_list2nmem_pred.
     destruct_listmatch_n.
-    rewrite H21.
+    rewrite H20.
     rewrite selN_firstn by inode_bounds.
     rewrite selN_app; [ inode_bounds |].
     erewrite inode_blocks_length with (m := list2mem m); inode_bounds.
@@ -1241,24 +1313,133 @@ Opaque wnr_indirect.
     (* from indirect blocks *)
     repeat rewrite_list2nmem_pred.
     destruct_listmatch_n.
-    step. step.
-    erewrite indirect_valid_r_off; eauto.
-    cancel. 
+    step.
+    erewrite indirect_valid_r_off in *; eauto.
+    apply not_wlt_ge in H11; apply wle_le in H11 as H13; simpl in *.
+    step.
     list2nmem_ptsto_cancel.
-    Search dummy0.
-    eapply indirect_valid_off_bound; eauto.
-    erewrite indirect_valid_r_off; eauto.
+    unfold indrep in H3; destruct_lift H3.
+    rewrite wminus_minus; auto.
+    rewrite sub_gt_0_lt_sum; auto.
+    apply wlt_lt in H14.
+    replace #(wnr_direct ^+ wnr_indirect) with (nr_direct + nr_indirect) in H14 by auto.
+    simpl in *; omega.
     step.
     subst.
-    rewrite H19.
+    rewrite wminus_minus; auto.
+    simpl.
+    rewrite H20.
+    unfold indrep in *.
+    apply wlt_lt in H14.
+    destruct_lift H3.
+    replace #(wnr_direct ^+ wnr_indirect) with (nr_direct + nr_indirect) in * by auto.
     rewrite selN_firstn; inode_bounds.
     rewrite selN_app2.
-    erewrite inode_blocks_length with (m := list2mem m); inode_bounds.
-    rewrite wminus_minus; auto.
+    erewrite inode_blocks_length with (m:= list2mem m); inode_bounds.
+    rewrite selN_app1 by (try rewrite sub_gt_0_lt_sum; auto; omega); auto.
+    pred_apply. cancel.
+    erewrite inode_blocks_length with (m:= list2mem m); inode_bounds.
     pred_apply; cancel.
-    erewrite inode_blocks_length with (m := list2mem m); inode_bounds.
-    apply wle_le in H11; auto.
-    pred_apply; cancel.
+
+    (* from dindirect blocks *)
+    step.
+    erewrite dindirect_valid_r_off in *; eauto.
+    list2nmem_ptsto_cancel.
+    erewrite dindirect_valid_r_off in H3; eauto.
+    unfold dindrep in H3;  destruct_lift H3.
+    rewrite H6, nr_in_dindirect_eq_nr_indirect, <- wordToNat_wnr_indirect.
+    apply wlt_lt.
+    eapply wminus_wminus_div_lt; eauto.
+    list2nmem_ptsto_cancel.
+    erewrite dindirect_valid_r_off in H3; eauto.
+    unfold dindrep, indrep in H3; destruct_lift H3.
+    eapply listmatch_indrep_length in H3 as HH.
+    unfold listmatch in H3; destruct_lift H3.
+    apply concat_hom_length in HH.
+    rewrite <- H21, H22 in HH.
+    rewrite nr_dindirect_eq in HH.
+    rewrite mult_comm in HH.
+    apply Nat.mul_cancel_r in HH.
+    rewrite <- HH.
+    rewrite nr_in_dindirect_eq_nr_indirect, <- wordToNat_wnr_indirect.
+    apply wlt_lt.
+    eapply wminus_wminus_div_lt; eauto.
+    unfold nr_indirect. intuition.
+    
+    step.
+    erewrite dindirect_valid_r_off in *; eauto.
+    unfold dindrep in *.
+    rewrite sep_star_comm. (* move the listmatch on dummy2 closer to the front *)
+    erewrite listmatch_extract.
+    cancel.
+    unfold dindrep, indrep in H3; destruct_lift H3.
+    eapply listmatch_indrep_length in H3 as HH.
+    unfold listmatch in H3; destruct_lift H3.
+    apply concat_hom_length in HH.
+    rewrite <- H16, H19 in HH.
+    rewrite nr_dindirect_eq in HH.
+    rewrite mult_comm in HH.
+    apply Nat.mul_cancel_r in HH.
+    rewrite H21, <- HH.
+    rewrite nr_in_dindirect_eq_nr_indirect, <- wordToNat_wnr_indirect.
+    apply wlt_lt.
+    eapply wminus_wminus_div_lt; eauto.
+    unfold nr_indirect; intuition.
+
+    list2nmem_ptsto_cancel.
+    erewrite dindirect_valid_r_off in *; eauto.
+    unfold dindrep in *.
+    apply sep_star_comm in H3.
+    erewrite listmatch_extract in H3.
+    unfold indrep in H3.
+    destruct_lift H3.
+    rewrite H24.
+    rewrite <- wordToNat_wnr_indirect.
+    apply wlt_lt.
+    apply wmod_upper_bound.
+    rewrite wnr_indirect_eq.
+    apply neq0_wneq0. simpl; omega.
+
+    destruct_lift H3.
+    rewrite H7.
+    rewrite nr_in_dindirect_eq_nr_indirect.
+    rewrite <- wordToNat_wnr_indirect.
+    apply wlt_lt.
+    eapply wminus_wminus_div_lt; eauto.
+
+    step.
+    subst.
+    erewrite nested_selN_concat.
+    rewrite wordToNat_wdivmod.
+    apply not_wlt_ge, wle_le in H13 as H14.
+    assert (#(off ^- wnr_direct ^- wnr_indirect) = #(off) - nr_direct - nr_indirect).
+      repeat rewrite wminus_minus. rewrite wnr_indirect_eq. reflexivity.
+      intuition.
+      apply le_wle. rewrite wminus_minus.
+      apply Nat.le_add_le_sub_l. rewrite wordToNat_wnr_indirect.
+      rewrite wnr_direct_plus_wnr_indirect_eq in *. simpl in *. omega.
+      intuition.
+    rewrite H6.
+    erewrite dindirect_valid_r_off in *; eauto.
+    erewrite indirect_valid_r_off in *; eauto.
+    unfold dindrep, indrep in H3; destruct_lift H3.
+    rewrite <- concat_eq_fold_right_app.
+    rewrite H20.
+    rewrite wnr_direct_plus_wnr_indirect_eq in *.
+    rewrite <- H23.
+    rewrite selN_firstn by auto.
+    rewrite selN_app2; erewrite inode_blocks_length with (m:= list2mem m);inode_bounds.
+    rewrite selN_app2 by omega. rewrite H15; auto.
+    pred_apply; cancel. pred_apply; cancel.
+    rewrite wnr_indirect_eq. simpl. intuition.
+    apply wlt_lt, wmod_upper_bound.
+    apply neq0_wneq0. rewrite wnr_indirect_eq; simpl; intuition.
+    erewrite dindirect_valid_r_off in *; eauto.
+    unfold dindrep, indrep in H3.
+    destruct_lift H3.
+    eapply listmatch_indrep_length in H3.
+    eapply H3.
+    Grab Existential Variables. auto. auto.
   Qed.
 
 
