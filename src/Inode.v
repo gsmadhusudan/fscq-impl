@@ -329,247 +329,33 @@ Module INODE.
   Definition dindxp bn := RecArray.Build_xparams bn $1.
 
   (** The block at `bn` is a doubly indirect block that contains a list of addresses of indirect blocks *)
-  Definition dindrep bxp bn (indlist : list addr) :=
+  Definition dindrep bxp bn indlist indblocks (blist : list addr) :=
     ([[ length indlist = nr_ind_in_dindirect ]] * [[ BALLOC.valid_block bxp bn ]] *
-     RecArray.array_item dindtype wnr_ind_in_dindirect dindsz_ok (dindxp bn) indlist)%pred.
-
-(*
-  Definition dindrep2 bxp bn off indlist  :=
-    (exists indlist indaddr ind_ v,
-    [[ length  = nr_dindirect ]] * 
-    [[ (off |-> v) (list2mem ) ]] *
-    dindrep bxp bn indlist *
-    [[ ((off ^/ wnr_ind_in_dindirect) |-> indaddr) (list2mem indlist) ]] *
-    indrep bxp indaddr ind_ *
-    [[ ((off ^% wnr_ind_in_dindirect) |-> v) (list2mem ind_) ]])%pred.
-*)
-Print Forall.
-Print In.
-
-Print seq.
-  Definition dindrep_big bxp bn indlist indblocks (blist : list addr) :=
-    (dindrep bxp bn indlist
-      * listmatch (indrep bxp) indlist indblocks
-      * [[ length blist = nr_dindirect ]]
-      * [[ blist = concat indblocks ]]
-      )%pred.
-
-
-  Definition sublist (A:Type) (n m:nat) (l:list A) :=
-    skipn n (firstn m l).
-
+     RecArray.array_item dindtype wnr_ind_in_dindirect dindsz_ok (dindxp bn) indlist *
+     listmatch (indrep bxp) indlist indblocks *
+     [[ length blist = nr_dindirect ]] *
+     [[ blist = concat indblocks ]]
+     )%pred.
   Opaque nr_ind_in_dindirect.
-
+(*
   Theorem dindrep_big_seq : forall A B bxp bn indlist indblocks blist off v v2 m,
-    (dindrep_big bxp bn indlist indblocks blist * [[ off < nr_dindirect ]]
-      * [[(A * (off / nr_ind_in_dindirect) |-> v2)%pred (list2nmem indblocks) ]]
-      * [[ (B * (off mod nr_ind_in_dindirect) |-> v)%pred (list2nmem v2) ]])%pred m ->
+    dindrep_big bxp bn indlist indblocks blist m ->  off < nr_dindirect ->
+      (A * (off / nr_ind_in_dindirect) |-> v2)%pred (list2nmem indblocks) ->
+      (B * (off mod nr_ind_in_dindirect) |-> v)%pred (list2nmem v2) ->
     selN blist off $0 = v.
   Proof.
     unfold dindrep_big, dindrep, indrep; intros.
     destruct_lift H.
     subst.
     eapply list2nmem_sel in H2.
-    eapply list2nmem_sel in H0.
+    eapply list2nmem_sel in H1.
     rewrite H2.
-    rewrite H0.
+    rewrite H1.
     admit.
   Admitted.
-
-  Definition blist_ind (blist : list addr) off :=
-    let start := ((off ^/ wnr_ind_in_dindirect) ^* wnr_ind_in_dindirect) in
-    sublist (# start) ((# start) + nr_ind_in_dindirect) blist.
-
-  Theorem map_skip_comm : forall T V (l : list T) (f : T -> V) n, skipn n (map f l) = map f (skipn n l).
-  Proof.
-    intros. generalize dependent l.
-    induction n; auto.
-    induction l; auto.
-    simpl. rewrite IHn. reflexivity.
-  Qed.
-  Theorem map_sublist_comm : forall T V (l : list T) (f : T -> V) m n, map f (sublist m n l) = sublist m n (map f l).
-  Proof.
-    unfold sublist.
-    intros. erewrite LOG.firstn_map.
-    rewrite map_skip_comm. auto.
-  Qed.
-
-  Theorem selN_skipn : forall T (l : list T) n i, selN (skipn n l) i = selN l (n + i).
-  Proof.
-    intros. generalize dependent l. induction n; auto.
-    intros. simpl. induction l; auto; simpl in *. rewrite IHn; try omega. unfold selN. reflexivity.
-  Qed.
-  Fact off_div_wnr_indirect_lt_addrlen_N : forall (off : addr), #(off) < nr_dindirect ->
-    (N.of_nat # (off) / N.of_nat # (wnr_indirect) < Npow2 addrlen)%N.
-  Proof. intros.
-    apply N.div_lt_upper_bound.
-    compute. intuition. inversion H0.
-    rewrite wordToNat_wnr_indirect.
-
-    apply Nomega.Nlt_in.
-    rewrite N2Nat.inj_mul.
-    repeat rewrite N2Nat.id;
-    repeat rewrite Nat2N.id.
-    eapply Nat.lt_trans.
-    apply H.
-    unfold nr_dindirect.
-    Search (_ * _ < _).
-    apply mult_lt_compat_l.
-    rewrite <- Nat2N.id with (n := nr_ind_in_dindirect).
-    apply Nomega.Nlt_out. compute. auto. compute. omega.
-  Qed.
-
-
-  Theorem sublist_blist : forall off blist a v, length blist = nr_dindirect ->
-    v = selN blist #off a ->  #off < length blist ->
-    (selN (blist_ind blist off) (#(off ^% wnr_ind_in_dindirect)) a) = v.
-  Proof. intros.
-
-    unfold blist_ind, sublist.
-    rewrite selN_skipn. rewrite wnr_in_dindirect_eq_wnr_indirect.
-    rewrite selN_firstn.
-    Search wordToNat.
-    unfold wdiv, wmult, wmod.
-    unfold wordBin.
-    repeat rewrite wordToN_nat.
-    rewrite N.mul_comm.
-    Search NToWord.
-    repeat rewrite N2Nat_word.
-    Search N.div.
-    Search N.of_nat.
-    rewrite Ninj_mod.
-    rewrite Ninj_div.
-    rewrite N2Nat.inj_mul.
-    Search N.to_nat.
-    repeat rewrite N2Nat.id.
-    repeat rewrite Nat2N.id.
-    Search (_ * (_ / _ ) ).
-    rewrite <- Nat.div_mod.
-    symmetry. assumption.
-
-    compute; intuition.
-    compute; intuition.
-    eapply N.lt_trans.
-    Search N.modulo.
-    apply N.mod_lt.
-    compute; intuition; inversion H2.
-    compute; auto.
-    Search N.div.
-    apply off_div_wnr_indirect_lt_addrlen_N; omega.
-    rewrite <- Nat2N.inj_mul.
-    rewrite Ninj_div.
-    apply Nomega.Nlt_in.
-    repeat rewrite Nat2N.id; repeat rewrite N2Nat.id. rewrite wordToNat_wnr_indirect.
-    Search ( _ * (_ / _ )).
-    assert (nr_indirect * (# (off) / nr_indirect) <= # off).
-    Search (_ <= _).
-    apply Nat.mul_div_le; compute; intuition.
-    Search (_ <= _ -> _ < _).
-    eapply Nat.le_lt_trans. apply H2.
-    rewrite H in H1. eapply lt_trans. apply H1.
-    Search (_ < _ -> (_ < _)).
-    Search nr_dindirect.
-    SearchAbout nr_dindirect.
-    admit.
-    apply off_div_wnr_indirect_lt_addrlen_N.
-    omega.
-    Search (_ +_ < _ + _).
-    apply plus_lt_compat_l.
-    Search nr_indirect.
-    rewrite nr_in_dindirect_eq_nr_indirect.
-    unfold wnr_indirect.
-    apply lt_word_lt_nat.
-    unfold wmod, wordBin.
-    apply Nomega.Nlt_in.
-    repeat rewrite wordToN_nat.
-    repeat rewrite N2Nat_word.
-    rewrite Ninj_mod.
-    repeat rewrite N2Nat.id;
-    repeat rewrite Nat2N.id.
-    Search Nat.modulo.
-    apply Nat.mod_bound_pos. omega. compute. omega. compute. intuition.
-    admit.
-  Admitted.
-
-(*
-  Fix group A (l : list A) (s : list A) (n : nat) (k : nat) : list (list A) :=
-    match l with
-    | nil => [ [] ]
-    | x :: l' => 
-      match k with
-      | n => group A l' [x] n 0
-      | else => 
 *)
-    Theorem concat_eq_nil : forall T (l : list (list T)), concat l = [] -> Forall (eq []) l.
-    Proof.
-      intros. induction l; eauto. destruct a; eauto. simpl in H. inversion H.
-    Qed.
 
-    Theorem concat_repeat_nil : forall A n, @concat A (repeat [] n) = [].
-    Proof. induction n; eauto.
-    Qed.
-
-    Theorem concat_eq_nil_eq_repeat : forall T (l : list (list T)) n, concat l = [] -> length l = n -> l = repeat [] n.
-    Proof.
-      intros. subst. apply concat_eq_nil in H.
-      induction l; auto.
-      inversion H. subst. simpl. rewrite <- IHl; auto.
-    Qed.
-
-(*
-  Theorem dindrep_big_split_length : forall m bxp bn indlist ,
-    (dindrep_big bxp bn indlist ) m ->
-    (ngth  = nr_dindirect).
-  Proof.
-    intros. unfold dindrep_big in H. destruct_lift H.
-    Search (_ /\ _). assumption.
-  Qed.
-
-Search Forall.
-*)
-(*
-  Definition dindrep_total bxp bn ( : list addr) :=
-    (exists indlist indaddr,
-      (dindrep bxp bn bn_indlist)
-     [[ (ind |-> indaddr)%pred (list2mem bn_indlist) ]]
-     * (indrep bxp indaddr indlist)
-     * [[ (ind_off |-> baddr)%pred (list2mem indlist) ]]
-     * [[ (off |-> baddr) (list2mem ) ]]
-     * [[ ((ind ^* wnr_ind_in_dindirect ^+ ind_off) |-> baddr)%pred (list2mem ) ]])%pred.
-*)
-(*
-  Definition dindrep_again bxp bn ( : list addr) :=
-    (exists bn_indlist ind indaddr indlist baddr, (dindrep bxp bn bn_indlist)
-     * [[ (ind |-> indaddr)%pred (list2mem bn_indlist) ]]
-     * (indrep bxp indaddr indlist)
-     * [[ (ind_off |-> baddr)%pred (list2mem indlist) ]]
-     * [[ (off |-> baddr) (list2mem ) ]]
-     * [[ ((ind ^* wnr_ind_in_dindirect ^+ ind_off) |-> baddr)%pred (list2mem ) ]])%pred.
-*)
 Opaque nr_ind_in_dindirect.
-(* 
-  Theorem dindrep_down : forall F G bxp dindaddr indlist  indindex indaddr indblocks index v0 m,
-    (dindrep_big bxp dindaddr indlist ) m ->
-    (F * indindex |-> indaddr)%pred (list2nmem indlist) ->
-    (indrep bxp indaddr indblocks) m ->
-    (G * index |-> v0)%pred (list2nmem indblocks) ->
-    (((index + nr_ind_in_dindirect * indindex) |-> v0)%pred (list2nmem )).
-  Proof.
-    intros.
-    unfold dindrep_big in H.
-    apply dindrep_big_split in 
-    Print pred_apply.
-    apply dindrep_big_split in H.
-    unfold dindrep_big in H. destruct_lift H.
-    SearchAbout list2nmem.
-    eapply list2nmem_sel in H0.
-    eapply list2nmem_sel in H2.
-    unfold indrep in H1. destruct_lift H1.
-    unfold indrep in H.
-    Search concat.
-
-
-    destruct_lift H. *)
 
   Definition dindget T lxp a off mscs rx : prog T :=
     let^ (mscs, v) <- RecArray.get dindtype wnr_ind_in_dindirect dindsz_ok
@@ -581,8 +367,8 @@ Opaque nr_ind_in_dindirect.
            lxp (dindxp a) off v mscs;
     rx mscs.
 
-  Theorem dindirect_length : forall Fm bxp bn l m,
-    (Fm * dindrep bxp bn l)%pred m -> length l = nr_ind_in_dindirect.
+  Theorem dindirect_length : forall Fm bxp bn indlist indblocks blist m,
+    (Fm * dindrep bxp bn indlist indblocks blist)%pred m -> length indlist = nr_ind_in_dindirect.
   Proof.
     unfold dindrep; intros.
     destruct_lift H. auto.
@@ -593,19 +379,20 @@ Opaque nr_ind_in_dindirect.
     compute. auto.
   Qed.
 
-  Theorem dindirect_bound : forall Fm bxp bn l m,
-    (Fm * dindrep bxp bn l)%pred m -> length l <= wordToNat wnr_ind_in_dindirect.
+  Theorem dindirect_bound : forall Fm bxp bn indlist indblocks blist m,
+    (Fm * dindrep bxp bn indlist indblocks blist)%pred m -> length indlist <= wordToNat wnr_ind_in_dindirect.
   Proof.
     rewrite wordToNat_wnr_ind_in_dindirect.
     intros.
     erewrite dindirect_length; eauto.
   Qed.
 
-  Theorem dindget_ok : forall lxp bxp a off mscs,
-    {< F Fm A mbase m indlist indblocks blist bn,
+  Theorem dindget_ok : forall lxp bxp a off indlist indblocks blist mscs,
+    {< F Fm A B mbase m bn indblk,
     PRE           LOG.rep lxp F (ActiveTxn mbase m) mscs *
-                  [[ (Fm * dindrep_big bxp a indlist indblocks blist)%pred (list2mem m) ]] *
-                  [[ (A * #off |-> bn)%pred (list2nmem indlist) ]]
+                  [[ (Fm * dindrep bxp a indlist indblocks blist)%pred (list2mem m) ]] *
+                  [[ (A * #off |-> bn)%pred (list2nmem indlist) ]] *
+                  [[ (B * #off |-> indblk)%pred (list2nmem indblocks) ]]
     POST RET:^(mscs,r)
                   LOG.rep lxp F (ActiveTxn mbase m) mscs *
                   [[ r = bn ]]
@@ -614,12 +401,11 @@ Opaque nr_ind_in_dindirect.
   Proof.
     unfold dindget.
     hoare.
-    unfold dindrep_big, dindrep. cancel.
+    unfold dindrep. cancel.
     rewrite wmult_unit.
-    unfold dindrep_big, dindrep in H.
-    destruct_lift H.
-    apply list2nmem_inbound in H4.
-    unfold indrep in H.
+    unfold dindrep in H3.
+    destruct_lift H3.
+    apply list2nmem_inbound in H5.
     apply lt_wlt.
     rewrite wordToNat_wnr_ind_in_dindirect. omega.
   Qed.
@@ -627,11 +413,11 @@ Opaque nr_ind_in_dindirect.
   Theorem dindput_ok : forall lxp bxp a off bn mscs,
     {< F Fm A mbase m indlist indblocks blist indblk_in v0,
     PRE       LOG.rep lxp F (ActiveTxn mbase m) mscs *
-              [[ (Fm * dindrep_big bxp a indlist indblocks blist * indrep bxp bn indblk_in)%pred (list2mem m) ]] *
+              [[ (Fm * dindrep bxp a indlist indblocks blist * indrep bxp bn indblk_in)%pred (list2mem m) ]] *
               [[ (A * #off |-> v0)%pred (list2nmem indlist) ]]
     POST RET:mscs
               exists m' indlist' indblocks' blist' indblk_out, LOG.rep lxp F (ActiveTxn mbase m') mscs *
-              [[ (Fm * dindrep_big bxp a indlist' indblocks' blist' * indrep bxp v0 indblk_out)%pred (list2mem m') ]] *
+              [[ (Fm * dindrep bxp a indlist' indblocks' blist' * indrep bxp v0 indblk_out)%pred (list2mem m') ]] *
               [[ (A * #off |-> bn)%pred (list2nmem indlist')]]
     CRASH     LOG.would_recover_old lxp F mbase
     >} dindput lxp a off bn mscs.
@@ -639,45 +425,42 @@ Opaque nr_ind_in_dindirect.
     unfold dindput.
     hoare.
     instantiate (ilist := indlist).
-    unfold dindrep_big, dindrep, dindxp.
-    Focus 3.
-    unfold dindrep_big, dindrep, dindxp, upd.
+    unfold dindrep, dindxp.
+    (* using cancel here drops the lift_empty terms; canceling in the 3rd goal allows
+       ?F to include them nicely *)
+    Focus 3. 
+    unfold dindrep, dindxp, upd.
     rewrite length_updN.
     instantiate (indblk_out := (selN indblocks # (off) nil)).
     instantiate (indblocks' := (updN indblocks #(off) indblk_in)).
     instantiate (blist' := concat (updN indblocks # (off) indblk_in)).
-    cancel.
-    unfold dindrep_big, dindrep in H; destruct_lift H; assumption.
-    unfold dindrep_big, dindrep in H; destruct_lift H; assumption.
-    unfold dindrep_big, dindrep, listmatch in H; destruct_lift H.
-    assert ((Fm * listmatch (indrep bxp) (updN indlist # (off) bn) (updN indblocks # (off) indblk_in) *
-      indrep bxp v9 (selN indblocks # (off) nil) *
-      array_item dindtype wnr_ind_in_dindirect dindsz_ok (dindxp a) (updN indlist # off bn))
-      =p=> (Fm * indrep bxp v9 (selN indblocks # (off) nil) *
+    cancel; unfold dindrep, listmatch in H; destruct_lift H; try assumption.
+    (* There's a better way to do this with matching, I bet, but I don't know what it is.
+       The goal is to get the listpred in H to the front so listmatch_lift_r can be applied *)
+    assert ((Fm * indrep bxp v9 (selN indblocks # (off) nil) *
       array_item dindtype wnr_ind_in_dindirect dindsz_ok (dindxp a) (updN indlist # off bn) *
-      listmatch (indrep bxp) (updN indlist # (off) bn) (updN indblocks # (off) indblk_in))) by cancel.
-    apply H3 in H7.
-    eapply listmatch_lift_r in H7.
-    apply concat_hom_length in H7.
-    rewrite H7.
-    rewrite length_updN.
-    rewrite <- H6.
-    rewrite H0.
-    unfold nr_dindirect.
-    rewrite mult_comm. reflexivity.
-    intros. unfold indrep.
+      listmatch (indrep bxp) (updN indlist # (off) bn) (updN indblocks # (off) indblk_in))%pred (list2mem m')).
+      pred_apply. cancel.
+    eapply listmatch_lift_r in H3.
+    apply concat_hom_length in H3.
+    subst.
+    rewrite H3, length_updN, <- H6, H0.
+    unfold nr_dindirect. auto.
+    intros; unfold indrep.
+    rewrite nr_in_dindirect_eq_nr_indirect.
     instantiate (1 := fun x y => (lift_empty (BALLOC.valid_block bxp x) * array_item indtype wnr_indirect indsz_ok (indxp x) y)%pred).
     unfold piff; split; cancel.
+
     cancel.
     rewrite sep_star_comm.
     eapply list2nmem_sel in H4 as H5.
     rewrite H5.
     apply list2nmem_inbound in H4.
     apply listmatch_swap; auto.
-    unfold dindrep_big, listmatch in H. destruct_lift H. omega.
+    unfold dindrep, listmatch in H. destruct_lift H. omega.
     rewrite wmult_unit.
     apply lt_wlt. rewrite wordToNat_wnr_ind_in_dindirect.
-    unfold dindrep_big, dindrep, listmatch in H.
+    unfold dindrep, listmatch in H.
     apply list2nmem_inbound in H4.
     destruct_lift H.
     omega.
@@ -730,6 +513,9 @@ Opaque nr_ind_in_dindirect.
     cancel.
   Qed.
 
+  Fact wnr_indirect_eq : wnr_indirect = $ nr_indirect.
+  Proof. trivial. Qed.
+
 Opaque wnr_indirect.
 
   Theorem ind_ptsto_zero : forall a,
@@ -762,9 +548,9 @@ Opaque wnr_indirect.
 
   Definition dindlist0 := repeat (natToWord dinditemsz 0) nr_ind_in_dindirect.
 
-  Theorem dind_ptsto : forall bxp a vs,
-    dindrep bxp a vs
-    =p=> (a |-> (rep_block dindsz_ok vs))%pred.
+  Theorem dind_ptsto : forall bxp a indlist indblocks blist,
+    dindrep bxp a indlist indblocks blist
+    =p=> (a |-> (rep_block dindsz_ok blist))%pred.
   Proof.
     unfold dindrep, array_item, array_item_pairs, dindxp.
     cancel.
@@ -1033,76 +819,34 @@ Opaque wnr_indirect.
     simpl. omega.
   Qed.
 
+  Definition dindirect_valid bxp n bn indlist indblocks blist :=
+     ([[ n <= nr_direct + nr_indirect ]] \/ [[ n > nr_direct + nr_indirect]] * dindrep bxp bn indlist indblocks blist)%pred.
 
-  Definition dindirect_valid bxp n bn indlist :=
-     ([[ n <= nr_direct + nr_indirect ]] \/ [[ n > nr_direct + nr_indirect]] * dindrep bxp bn indlist)%pred.
-
-  Lemma dindirect_valid_r : forall bxp n bn indlist,
+  Lemma dindirect_valid_r : forall bxp n bn indlist indblocks blist,
     n > nr_direct + nr_indirect
-    -> dindirect_valid bxp n bn indlist <=p=> dindrep bxp bn indlist.
+    -> dindirect_valid bxp n bn indlist indblocks blist <=p=> dindrep bxp bn indlist indblocks blist.
   Proof.
-    intros. unfold dindirect_valid, piff; split; cancel.
-    omega.
+    intros. unfold dindirect_valid, piff; split. cancel. omega.
+    cancel.
   Qed.
 
-  Lemma dindirect_valid_l : forall bxp n bn indlist,
+  Lemma dindirect_valid_l : forall bxp n bn indlist indblocks blist,
     n <= nr_direct + nr_indirect
-    -> dindirect_valid bxp n bn indlist <=p=> emp.
+    -> dindirect_valid bxp n bn indlist indblocks blist <=p=> emp.
   Proof.
     intros. unfold dindirect_valid, piff; split; cancel.
     omega.
   Qed.
 
-  Lemma dindirect_valid_r_off : forall bxp n off bn indlist,
+  Lemma dindirect_valid_r_off : forall bxp n off bn indlist indblocks blist,
     wordToNat off < n
     -> (off >= wnr_direct ^+ wnr_indirect)%word
-    -> dindirect_valid bxp n bn indlist <=p=> dindrep bxp bn indlist.
+    -> dindirect_valid bxp n bn indlist indblocks blist <=p=> dindrep bxp bn indlist indblocks blist.
   Proof.
     auto; intros.
     apply dindirect_valid_r.
     apply wle_le in H0.
     replace (wordToNat (wnr_direct ^+ wnr_indirect)) with (nr_direct + nr_indirect) in * by auto.
-    omega.
-  Qed.
-
-  Print dindrep_again.
-
-  Definition dindirect_internal_valid bxp n bn off blist ind indaddr off baddr :=
-     ([[ n <= nr_direct + nr_indirect ]] \/ 
-      [[ n > nr_direct + nr_indirect]] * 
-      dindrep_again bxp bn bn_indlist indlist blist ind indaddr off baddr)%pred.
-
-  Lemma dindirect_internal_valid_r : forall bxp n bn bn_indlist indlist blist ind indaddr off baddr,
-    n > nr_direct + nr_indirect
-    -> dindirect_internal_valid bxp n bn bn_indlist indlist blist ind indaddr off baddr
-        <=p=> dindrep_again bxp bn bn_indlist indlist blist ind indaddr off baddr.
-  Proof.
-    intros. unfold dindirect_internal_valid, piff; split; cancel.
-    omega.
-  Qed.
-
-  Lemma dindirect_internal_valid_l : forall bxp n bn bn_indlist indlist blist ind indaddr off baddr,
-    n <= nr_direct + nr_indirect
-    -> dindirect_internal_valid bxp n bn bn_indlist indlist blist ind indaddr off baddr
-        <=p=> emp.
-  Proof.
-    intros. unfold dindirect_internal_valid, piff; split; cancel.
-    omega.
-  Qed.
-
-  Fact wordToNat_wnr_direct_plus_wnr_indirect : # (wnr_direct ^+ wnr_indirect) = nr_direct + nr_indirect.
-  Proof. auto. Qed.
-
-  Lemma dindirect_internal_valid_r_off : forall bxp n (off : nat) bn bn_indlist indlist blist ind indaddr off baddr,
-    wordToNat off < n
-    -> (off >= wnr_direct ^+ wnr_indirect)%word
-    -> dindirect_internal_valid bxp n bn bn_indlist indlist blist ind indaddr off baddr
-        <=p=> dindrep_again bxp bn bn_indlist indlist blist ind indaddr off baddr.
-  Proof.
-    auto; intros.
-    apply dindirect_internal_valid_r.
-    apply wle_le in H0. Search (wnr_direct ^+ wnr_indirect).
-    rewrite wordToNat_wnr_direct_plus_wnr_indirect in H0.
     omega.
   Qed.
 
@@ -1112,7 +856,8 @@ Opaque wnr_indirect.
     [[ length (IBlocks ino) <= blocks_per_inode ]] *
     [[ iattr_match (IAttr ino) (rec :-> "attr") ]] *
     exists indlist, indirect_valid bxp (length (IBlocks ino)) (rec :-> "indptr") indlist *
-    exists dindlist, dindirect_total_valid bxp (length (IBlocks ino)) (rec :-> "dindptr") dindlist *
+    exists dindlist indlist' indblocks,
+      dindirect_valid bxp (length (IBlocks ino)) (rec :-> "dindptr") indlist' indblocks dindlist *
     [[ IBlocks ino = firstn (length (IBlocks ino)) ((rec :-> "blocks") ++ indlist ++ dindlist) ]]
     )%pred.
 
@@ -1200,26 +945,19 @@ Opaque wnr_indirect.
     unfold piff, inode_match, inode_match_direct; split; intros.
     apply wle_le in H.
     cancel.
-    rewrite indirect_valid_l; try (rewrite H2; unfold nr_direct in *; simpl; omega).
-    rewrite dindirect_valid_l; try (rewrite H2; unfold nr_direct in *; simpl; omega).
-
-    rewrite dindirect_internal_valid_l; try (rewrite H2; unfold nr_direct in *; simpl; omega).
+    rewrite indirect_valid_l, dindirect_valid_l by (rewrite H2; unfold nr_direct in *; simpl; omega).
     cancel.
-    unfold nr_direct; omega.
-    rewrite firstn_app_l in H8. assumption.
-
-    rewrite direct_blocks_length by auto. unfold nr_direct; omega.
-
-    cancel.
-    instantiate (indlist := nil). instantiate (dindlist := nil). instantiate (dind_indlist := nil).
-    rewrite indirect_valid_l; auto; try omega.
-    rewrite dindirect_valid_l by omega.
-    rewrite dindirect_internal_valid_l by omega.
+    rewrite H2; auto.
+    rewrite <- H2 in H.
+    erewrite <- firstn_app_l. apply H7.
+    rewrite direct_blocks_length; auto.
+    cancel; auto.
+    rewrite indirect_valid_l, dindirect_valid_l by omega.
     cancel.
     unfold blocks_per_inode; omega.
-    rewrite app_nil_r; auto.
+    repeat rewrite app_nil_r; auto.
+    Grab Existential Variables. auto. auto.
   Qed.
-
 
   (* Hints for resolving default values *)
 
@@ -1290,14 +1028,14 @@ Opaque wnr_indirect.
     erewrite listmatch_length_r; eauto; omega.
   Qed.
 
-    Lemma wordToNat_natToWord_blocks_per_inode : wordToNat (natToWord addrlen blocks_per_inode) = blocks_per_inode.
-    Proof.
-      apply wordToNat_natToWord_idempotent.
-      unfold blocks_per_inode, nr_dindirect.
-      repeat rewrite Nat2N.inj_add.
-      rewrite Nat2N.inj_mul.
-      compute. auto.
-    Qed.
+  Lemma wordToNat_natToWord_blocks_per_inode : wordToNat (natToWord addrlen blocks_per_inode) = blocks_per_inode.
+  Proof.
+    apply wordToNat_natToWord_idempotent.
+    unfold blocks_per_inode, nr_dindirect.
+    repeat rewrite Nat2N.inj_add.
+    rewrite Nat2N.inj_mul.
+    compute. auto.
+  Qed.
 
   Lemma blocks_bound: forall Fm bxp xp l m i,
     (Fm * rep bxp xp l)%pred m
@@ -1364,9 +1102,9 @@ Opaque wnr_indirect.
       end
     end.
 
-
   Hint Extern 0 (okToUnify (irrep _ _) (irrep _ _)) => constructor : okToUnify.
   Hint Extern 0 (okToUnify (indrep _ _ _) (indrep _ _ _)) => constructor : okToUnify.
+  Hint Extern 0 (okToUnify (dindrep _ _ _ _ _) (dindrep _ _ _ _ _)) => constructor : okToUnify.
 
   Theorem ilen_ok : forall lxp bxp xp inum mscs,
     {< F Fm A mbase m ilist ino,
